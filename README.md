@@ -1,4 +1,4 @@
-# Kang - High Performance HTTP Server
+# Kang - The crustaceous HTTP server 
 
 ![Kang_Logo-removebg-preview](https://github.com/user-attachments/assets/8a93db9c-2a76-4f85-a6f4-5811c023d848)
 
