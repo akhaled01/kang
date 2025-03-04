@@ -1,6 +1,11 @@
 # Kang - High Performance HTTP Server
 
+![Kang_Logo-removebg-preview](https://github.com/user-attachments/assets/8a93db9c-2a76-4f85-a6f4-5811c023d848)
+
 Kang is a high-performance HTTP server written in Rust, designed for modern web applications. It uses an event-driven architecture with epoll for efficient I/O handling and supports multiple server configurations similar to Nginx.
+
+>[!CAUTION]
+>This project is still in very early stages and will undergo continous development. Please do not use for production environments
 
 ## Features
 
