@@ -1,2 +1,2 @@
 mod epoll;
-pub use epoll::Server;
+pub use epoll::EpollListener;

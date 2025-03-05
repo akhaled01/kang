@@ -4,8 +4,7 @@ use kang::info;
 use kang::server;
 
 fn main() -> io::Result<()> {
-    info!("Current working directory: {:?}", std::env::current_dir()?);
-    let mut server = server::Server::new("127.0.0.1:8080")?;
+    let mut server = server::EpollListener::new("127.0.0.1:8080")?;
 
     info!("Kickstarting kang service");
     info!("Server running at http://127.0.0.1:8080");

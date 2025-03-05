@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::Path;
 
-use crate::{debug, error, info};
+use crate::{debug, info};
 use crate::utils::parse_size;
 
 pub struct UploadHandler {
@@ -70,7 +70,7 @@ impl MultipartFormData {
         let full_boundary = format!("--{}", boundary);
         let full_boundary_bytes = full_boundary.as_bytes();
         let end_boundary = format!("--{}--", boundary);
-        let end_boundary_bytes = end_boundary.as_bytes();
+        let _end_boundary_bytes = end_boundary.as_bytes();
 
         let mut fields = HashMap::new();
         let mut files = Vec::new();
@@ -91,7 +91,7 @@ impl MultipartFormData {
         // Process each part between boundaries
         for i in 0..boundary_positions.len() - 1 {
             let start = boundary_positions[i] + full_boundary_bytes.len();
-            let mut end = boundary_positions[i + 1];
+            let end = boundary_positions[i + 1];
 
             // Skip the first CRLF after the boundary
             if start + 2 <= body.len() && &body[start..start+2] == b"\r\n" {

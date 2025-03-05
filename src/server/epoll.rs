@@ -5,22 +5,22 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::fs;
 use std::path::Path;
 
-use crate::http::{Request, Response, UploadHandler};
-use crate::{info, error};
+use crate::{error, info, warn};
 
 pub const MAX_EVENTS: usize = 1024;
 
-/// The server struct represents a TCP listening socket using the epoll interface.
+/// TCP listening socket using the epoll interface.
 ///
 /// It contains a non-blocking listener, an epoll file descriptor, and a map of connected clients.
+/// Each server spawned by kang has its own epoll listener.
 #[derive(Debug)]
-pub struct Server {
+pub struct EpollListener {
     pub epoll_fd: RawFd,
     pub listener: TcpListener,
     pub connections: HashMap<RawFd, TcpStream>,
 }
 
-impl Server {
+impl EpollListener {
     /// Creates a new instance of the server.
     ///
     /// # Arguments
@@ -59,7 +59,7 @@ impl Server {
             return Err(io::Error::last_os_error());
         }
 
-        Ok(Server {
+        Ok(EpollListener {
             epoll_fd,
             listener,
             connections: HashMap::new(),
@@ -92,7 +92,7 @@ impl Server {
                     match self.handle_connection(fd) {
                         Ok(_) => (),
                         Err(e) => {
-                            eprintln!("Connection error: {}", e);
+                            warn!("Connection error: {}", e);
                             self.remove_connection(fd)?;
                         }
                     }
@@ -227,7 +227,7 @@ impl Server {
                             }
                         } else {
                             // File not found
-                            info!("File not found: {}", file_path);
+                            warn!("File not found: {}", file_path);
                             let mut response = crate::http::Response::new(404, "Not Found");
                             response.set_header("Content-Type", "text/plain");
                             response.set_body_string(&format!("404 - File Not Found: {}", path));
@@ -261,9 +261,9 @@ impl Server {
     }
 }
 
-impl Drop for Server {
+impl Drop for EpollListener {
     fn drop(&mut self) {
         unsafe { libc::close(self.epoll_fd) };
-        info!("Server shutting down");
+        info!("Epoll listener shutting down");
     }
 }
