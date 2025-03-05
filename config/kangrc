@@ -39,12 +39,11 @@
           "directory_listing": false
         },
         {
-          "path": "/upload",
-          "root": "/var/www/uploads",
-          "methods": [
-            "POST"
-          ],
-          "client_max_body_size": "100M"
+          "upload": {
+            "root": "/var/www/uploads",
+            "methods": ["POST"],
+            "client_max_body_size": "100M"
+          }
         },
         {
           "path": "/old",

@@ -2,8 +2,11 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::fs;
+use std::path::Path;
 
-use crate::info;
+use crate::http::{Request, Response, UploadHandler};
+use crate::{info, error};
 
 pub const MAX_EVENTS: usize = 1024;
 
@@ -101,7 +104,7 @@ impl Server {
     pub fn accept_connection(&mut self) -> io::Result<()> {
         loop {
             match self.listener.accept() {
-                Ok((stream, _)) => {
+                Ok((stream, addr)) => {
                     stream.set_nonblocking(true)?;
                     let fd = stream.as_raw_fd();
 
@@ -118,7 +121,7 @@ impl Server {
                         return Err(io::Error::last_os_error());
                     }
 
-                    info!("Accepted connection from fd={}", fd);
+                    info!("Accepted connection from {:?} fd={}", addr, fd);
 
                     self.connections.insert(fd, stream);
                 }
@@ -147,13 +150,94 @@ impl Server {
                 }
                 Ok(n) => {
                     // Process HTTP request here
-                    println!("Received {} bytes", n);
-                    println!("{}", String::from_utf8_lossy(&buffer[..n]));
-                    let response = "HTTP/1.1 200 OK\r\n\
-                                  Content-Length: 13\r\n\
-                                  \r\n\
-                                  Hello, World!";
-                    stream.write_all(response.as_bytes())?;
+                    info!("Received {} bytes from fd={}", n, fd);
+                    let request = match crate::http::Request::parse(&buffer[..n]) {
+                        Ok(req) => req,
+                        Err(e) => {
+                            let mut response = crate::http::Response::new(400, "Bad Request");
+                            response.set_header("Content-Type", "text/plain");
+                            response.set_body_string(&format!("Bad request: {}", e));
+                            stream.write_all(&response.to_bytes())?;
+                            continue;
+                        }
+                    };
+
+                    info!("Processing {} request to {}", request.method().as_str(), request.path());
+                    // Generate response based on request
+                    let response = if request.has_file_upload() {
+                        // Handle file upload using our upload module
+                        match request.parse_multipart_form_data() {
+                            Ok(form_data) => {
+                                //let upload_handler = crate::http::UploadHandler::new("10M", "./static/uploads");
+                                let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./static/uploads".to_string());
+                                let upload_handler = crate::http::UploadHandler::new("10M", &upload_dir);
+                                match upload_handler.handle_upload(&form_data) {
+                                    Ok(files) => {
+                                        info!("Successfully uploaded {} files", files.len());
+                                        crate::http::Response::file_upload_success(files.len())
+                                    },
+                                    Err(e) => {
+                                        error!("Upload error: {}", e);
+                                        crate::http::Response::file_upload_error(500, &e.to_string())
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                error!("Failed to parse multipart form data: {}", e);
+                                crate::http::Response::file_upload_error(400, &e.to_string())
+                            }
+                        }
+                    } else {
+                        // Handle static file requests
+                        let path = request.path();
+                        let mut file_path = format!("static{}", path);
+                        
+                        // If path ends with /, add index.html
+                        if path.ends_with("/") {
+                            file_path.push_str("index.html");
+                        }
+                        
+                        // If file exists, serve it
+                        if Path::new(&file_path).exists() && fs::metadata(&file_path).map(|m| m.is_file()).unwrap_or(false) {
+                            let content_type = match Path::new(&file_path).extension().and_then(|e| e.to_str()) {
+                                Some("html") => "text/html",
+                                Some("css") => "text/css",
+                                Some("js") => "application/javascript",
+                                Some("jpg") | Some("jpeg") => "image/jpeg",
+                                Some("png") => "image/png",
+                                Some("gif") => "image/gif",
+                                _ => "application/octet-stream",
+                            };
+                            
+                            match fs::read(&file_path) {
+                                Ok(content) => {
+                                    info!("Serving static file: {}", file_path);
+                                    let mut response = crate::http::Response::new(200, "OK");
+                                    response.set_header("Content-Type", content_type);
+                                    response.set_body(content);
+                                    response
+                                },
+                                Err(e) => {
+                                    error!("Failed to read file {}: {}", file_path, e);
+                                    let mut response = crate::http::Response::new(500, "Internal Server Error");
+                                    response.set_header("Content-Type", "text/plain");
+                                    response.set_body_string(&format!("Failed to read file: {}", e));
+                                    response
+                                }
+                            }
+                        } else {
+                            // File not found
+                            info!("File not found: {}", file_path);
+                            let mut response = crate::http::Response::new(404, "Not Found");
+                            response.set_header("Content-Type", "text/plain");
+                            response.set_body_string(&format!("404 - File Not Found: {}", path));
+                            response
+                        }
+                    };
+
+                    // Send response
+                    stream.write_all(&response.to_bytes())?;
+                    info!("Response sent with status code {}", response.status_code());
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     // No more data to read
@@ -172,6 +256,7 @@ impl Server {
             return Err(io::Error::last_os_error());
         }
         self.connections.remove(&fd);
+        info!("Connection removed: fd={}", fd);
         Ok(())
     }
 }
@@ -179,5 +264,6 @@ impl Server {
 impl Drop for Server {
     fn drop(&mut self) {
         unsafe { libc::close(self.epoll_fd) };
+        info!("Server shutting down");
     }
 }
