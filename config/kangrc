@@ -1,68 +1,61 @@
 {
   "global": {
-    "worker_connections": 1024,
     "error_pages": {
       "root": "/etc/kang/error_pages",
-      "400": "400.html",
-      "403": "403.html",
       "404": "404.html",
-      "405": "405.html",
-      "413": "413.html",
       "500": "500.html"
     },
-    "client_max_body_size": "10M",
-    "timeouts": {
-      "request": 60,
-      "keep_alive": 75,
-      "cgi": 30
-    }
+    "client_max_body_size": "10M"
   },
   "servers": [
     {
-      "server_name": [
-        "example.com",
-        "www.example.com"
-      ],
-      "host": "0.0.0.0",
-      "port": 8080,
+      "server_name": ["api.example.com"],
+      "host": "127.0.0.1",
+      "ports": [8080, 8443],
       "is_default": true,
       "routes": [
         {
           "path": "/",
-          "root": "/var/www/html",
+          "root": "/var/www/api",
           "index": "index.html",
-          "methods": [
-            "GET",
-            "POST",
-            "DELETE"
-          ],
+          "methods": ["GET", "POST"],
           "directory_listing": false
         },
         {
-          "upload": {
-            "root": "/var/www/uploads",
-            "methods": ["POST"],
-            "client_max_body_size": "100M"
-          }
-        },
+          "path": "/uploads",
+          "root": "/var/www/uploads",
+          "methods": ["POST", "PUT"],
+          "client_max_body_size": "100M"
+        }
+      ]
+    },
+    {
+      "server_name": ["www.example.com", "example.com"],
+      "host": "127.0.0.1",
+      "ports": [9090],
+      "routes": [
         {
-          "path": "/old",
+          "path": "/old-docs",
           "redirect": {
-            "url": "/new",
+            "url": "/docs",
             "code": 301
           }
         },
         {
-          "path": "/scripts",
-          "root": "/var/www/cgi-bin",
-          "methods": [
-            "GET",
-            "POST"
-          ],
+          "path": "/cgi-bin",
+          "root": "/usr/local/cgi-bin",
+          "methods": ["GET", "POST"],
           "cgi": {
-            ".php": "/usr/bin/php-cgi"
-          },
-          "directory_listing": false
+            ".php": "/usr/bin/php-cgi",
+            ".py": "/usr/bin/python3"
+          }
+        },
+        {
+          "path": "/files",
+          "root": "/var/www/files",
+          "index": "index.html",
+          "directory_listing": true,
+          "methods": ["GET"]
         }
       ]
     }

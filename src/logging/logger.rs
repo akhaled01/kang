@@ -41,7 +41,9 @@ macro_rules! error {
 
 /// Internal error function called by the macro
 pub fn _error(message: &str) {
-    log(ERROR_PREFIX, message);
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+    let formatted = format!("[{}] {} {}", timestamp, ERROR_PREFIX, message);
+    eprintln!("{}", formatted);
 }
 
 /// Logs a debug message with format args
