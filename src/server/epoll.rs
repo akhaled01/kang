@@ -85,7 +85,7 @@ impl EpollListener {
                     // Handle new connection
                     match self.accept_connection() {
                         Ok(_) => (),
-                        Err(e) => eprintln!("Accept error: {}", e),
+                        Err(e) => error!("Accept error: {}", e),
                     }
                 } else {
                     // Handle existing connection
