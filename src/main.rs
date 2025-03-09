@@ -1,7 +1,7 @@
-use std::env;
+use std::{env, thread};
 
 use kang::config::Config;
-use kang::info;
+use kang::{info, error};
 use kang::server::EpollListener;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,9 +29,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Start all servers
+    // Start all servers in their own threads
+    let mut handles = Vec::new();
+    
     for mut server in servers {
-        server.listen_and_serve()?;
+        let handle = thread::spawn(move || {
+            if let Err(e) = server.listen_and_serve() {
+                error!("Server error: {}", e);
+            }
+        });
+        handles.push(handle);
+    }
+
+    // Wait for all server threads to complete
+    for handle in handles {
+        handle.join().unwrap();
     }
 
     Ok(())

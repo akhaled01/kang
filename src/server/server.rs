@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io};
 
-use crate::error;
+use crate::{error, info};
 
 use super::EpollListener;
 
@@ -58,6 +58,8 @@ impl Server {
 
         // Convert HashMap into Vec of listeners to avoid borrowing issues
         let listeners: Vec<_> = listeners.into_values().collect();
+
+        info!("Starting server: {} at {}:{}", self.server_name.join(", "), self.host, self.ports[0]);
 
         // Spawn threads for each listener
         for mut listener in listeners {
