@@ -115,7 +115,7 @@ impl Server {
                     for listener in listeners.iter_mut() {
                         if listener.connections.contains_key(&fd) {
                             match listener.handle_connection(fd) {
-                                Ok(_) => (),
+                                Ok(req) => (),
                                 Err(e) => {
                                     warn!("Connection error: {}", e);
                                     let _ = listener.remove_connection(fd);
