@@ -1,6 +1,9 @@
+use std::os::fd::RawFd;
+use std::os::unix::io::AsRawFd;
 use std::{collections::HashMap, io};
 
-use crate::{error, info};
+use crate::server::epoll::MAX_EVENTS;
+use crate::{error, info, warn};
 
 use super::EpollListener;
 
@@ -50,34 +53,79 @@ impl Server {
     }
 
     pub fn listen_and_serve(&mut self) -> io::Result<()> {
-        use std::thread;
-        let mut handles = Vec::new();
-
         // Take ownership of the listeners
         let listeners = std::mem::take(&mut self.listeners);
+        let mut listeners: Vec<EpollListener> = listeners.into_values().collect();
 
-        // Convert HashMap into Vec of listeners to avoid borrowing issues
-        let listeners: Vec<_> = listeners.into_values().collect();
+        info!(
+            "Starting server: [{}] at {}:{}",
+            self.server_name.join("/"),
+            self.host,
+            self.ports[0]
+        );
 
-        info!("Starting server: {} at {}:{}", self.server_name.join(", "), self.host, self.ports[0]);
-
-        // Spawn threads for each listener
-        for mut listener in listeners {
-            let handle = thread::spawn(move || {
-                if let Err(e) = listener.run() {
-                    error!("Error serving listener: {}", e);
-                }
-            });
-            handles.push(handle);
+        let epoll_fd = unsafe { libc::epoll_create1(0) };
+        if epoll_fd < 0 {
+            return Err(io::Error::last_os_error());
         }
 
-        // Wait for all threads to finish
-        for handle in handles {
-            if let Err(e) = handle.join() {
-                eprintln!("Thread join error: {:?}", e);
+        // Register all listeners to the global epoll instance
+        for listener in &listeners {
+            let mut event = libc::epoll_event {
+                events: (libc::EPOLLIN | libc::EPOLLET) as u32,
+                u64: listener.listener.as_raw_fd() as u64,
+            };
+
+            if unsafe {
+                libc::epoll_ctl(
+                    epoll_fd,
+                    libc::EPOLL_CTL_ADD,
+                    listener.listener.as_raw_fd(),
+                    &mut event,
+                )
+            } < 0
+            {
+                return Err(io::Error::last_os_error());
             }
         }
 
-        Ok(())
+        // Epoll event loop (single thread, handles all listeners)
+        let mut events = vec![libc::epoll_event { events: 0, u64: 0 }; MAX_EVENTS];
+
+        loop {
+            let nfds =
+                unsafe { libc::epoll_wait(epoll_fd, events.as_mut_ptr(), MAX_EVENTS as i32, -1) };
+
+            if nfds < 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            for n in 0..nfds {
+                let fd = events[n as usize].u64 as RawFd;
+
+                // Find the corresponding listener
+                if let Some(listener) = listeners.iter_mut().find(|l| l.listener.as_raw_fd() == fd)
+                {
+                    match listener.accept_connection() {
+                        Ok(_) => (),
+                        Err(e) => error!("Accept error: {}", e),
+                    }
+                } else {
+                    // Find the connection and process data
+                    for listener in listeners.iter_mut() {
+                        if listener.connections.contains_key(&fd) {
+                            match listener.handle_connection(fd) {
+                                Ok(_) => (),
+                                Err(e) => {
+                                    warn!("Connection error: {}", e);
+                                    let _ = listener.remove_connection(fd);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
