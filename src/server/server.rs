@@ -2,6 +2,7 @@ use std::os::fd::RawFd;
 use std::os::unix::io::AsRawFd;
 use std::{collections::HashMap, io};
 
+use crate::config::Route;
 use crate::server::epoll::MAX_EVENTS;
 use crate::{error, info, warn};
 
@@ -15,22 +16,6 @@ pub struct Server {
     pub is_default: bool,
     pub routes: Vec<Route>,
     pub client_max_body_size: Option<String>,
-}
-
-pub struct Route {
-    pub path: String,
-    pub root: Option<String>,
-    pub index: Option<String>,
-    pub methods: Vec<String>,
-    pub directory_listing: bool,
-    pub redirect: Option<Redirect>,
-    pub cgi: Option<HashMap<String, String>>,
-    pub client_max_body_size: Option<String>,
-}
-
-pub struct Redirect {
-    pub url: String,
-    pub code: u16,
 }
 
 impl Server {
@@ -58,7 +43,7 @@ impl Server {
         let mut listeners: Vec<EpollListener> = listeners.into_values().collect();
 
         info!(
-            "Starting server: [{}] at {}:{}",
+            "Serving: [{}] at {}:{}",
             self.server_name.join("/"),
             self.host,
             self.ports[0]

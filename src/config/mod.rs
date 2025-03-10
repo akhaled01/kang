@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
 use thiserror::Error;
 
-use crate::server::{Route, Server, Redirect};
+use crate::server::Server;
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -10,6 +10,22 @@ pub enum ConfigError {
     IoError(#[from] std::io::Error),
     #[error("Failed to parse config file: {0}")]
     ParseError(#[from] serde_json::Error),
+}
+
+pub struct Redirect {
+    pub url: String,
+    pub code: u16,
+}
+
+pub struct Route {
+    pub path: String,
+    pub root: Option<String>,
+    pub index: Option<String>,
+    pub methods: Vec<String>,
+    pub directory_listing: bool,
+    pub redirect: Option<Redirect>,
+    pub cgi: Option<HashMap<String, String>>,
+    pub client_max_body_size: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,7 +86,7 @@ impl Config {
         let config: Config = serde_json::from_str(&contents)?;
         Ok(config)
     }
-    
+
     pub fn create_servers(&self) -> Vec<Server> {
         self.servers
             .iter()
