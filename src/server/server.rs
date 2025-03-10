@@ -2,8 +2,8 @@ use std::os::fd::RawFd;
 use std::os::unix::io::AsRawFd;
 use std::{collections::HashMap, io};
 
-use crate::config::Route;
 use crate::server::epoll::MAX_EVENTS;
+use crate::server::route::Route;
 use crate::{error, info, warn};
 
 use super::EpollListener;
@@ -86,24 +86,64 @@ impl Server {
             }
 
             for n in 0..nfds {
-                let fd = events[n as usize].u64 as RawFd;
+                let event = &events[n as usize];
+                let fd = event.u64 as RawFd;
+                let events = event.events;
 
                 // Find the corresponding listener
                 if let Some(listener) = listeners.iter_mut().find(|l| l.listener.as_raw_fd() == fd)
                 {
-                    match listener.accept_connection() {
-                        Ok(_) => (),
-                        Err(e) => error!("Accept error: {}", e),
+                    info!("Accepting New Connections");
+                    // New connection available
+                    if events & libc::EPOLLIN as u32 != 0 {
+                        match listener.accept_connection(epoll_fd) {
+                            Ok(_) => (),
+                            Err(e) => error!("Accept error: {}", e),
+                        }
                     }
                 } else {
-                    // Find the connection and process data
+                    info!("Handling Existing Connections");
+                    // Handle existing connection
                     for listener in listeners.iter_mut() {
                         if listener.connections.contains_key(&fd) {
-                            match listener.handle_connection(fd) {
-                                Ok(req) => (),
-                                Err(e) => {
-                                    warn!("Connection error: {}", e);
-                                    let _ = listener.remove_connection(fd);
+                            // Only process if we have read events
+                            if events & libc::EPOLLIN as u32 != 0 {
+                                match listener.handle_connection(fd) {
+                                    Ok(req) => {
+                                        // Find matching route
+                                        let route = self
+                                            .routes
+                                            .iter()
+                                            .find(|r| r.path == req.path())
+                                            .unwrap_or_else(|| &self.routes[0]);
+
+                                        info!("Handling route: {}", route.path);
+
+                                        // Process request and send response
+                                        let response = route.handle();
+                                        match listener.send_bytes(response.to_bytes(), fd) {
+                                            Ok(_) => {
+                                                info!("Response sent successfully to fd={}", fd);
+                                                let _ = listener.remove_connection(fd, epoll_fd);
+                                            }
+                                            Err(e) => {
+                                                error!("Failed to send response: {}", e);
+                                                let _ = listener.remove_connection(fd, epoll_fd);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        match e.kind() {
+                                            io::ErrorKind::WouldBlock => {
+                                                // Not enough data yet, keep connection open
+                                                info!("Waiting for more data on fd={}", fd);
+                                            }
+                                            _ => {
+                                                warn!("Connection error: {}", e);
+                                                let _ = listener.remove_connection(fd, epoll_fd);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             break;

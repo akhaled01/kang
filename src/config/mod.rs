@@ -12,22 +12,6 @@ pub enum ConfigError {
     ParseError(#[from] serde_json::Error),
 }
 
-pub struct Redirect {
-    pub url: String,
-    pub code: u16,
-}
-
-pub struct Route {
-    pub path: String,
-    pub root: Option<String>,
-    pub index: Option<String>,
-    pub methods: Vec<String>,
-    pub directory_listing: bool,
-    pub redirect: Option<Redirect>,
-    pub cgi: Option<HashMap<String, String>>,
-    pub client_max_body_size: Option<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub global: GlobalConfig,
@@ -92,23 +76,5 @@ impl Config {
             .iter()
             .map(|server_config| Server::new(server_config.clone()))
             .collect()
-    }
-}
-
-impl From<RouteConfig> for Route {
-    fn from(config: RouteConfig) -> Self {
-        Route {
-            path: config.path,
-            root: config.root,
-            index: config.index,
-            methods: config.methods,
-            directory_listing: config.directory_listing,
-            redirect: config.redirect.map(|r| Redirect {
-                url: r.url,
-                code: r.code,
-            }),
-            cgi: config.cgi,
-            client_max_body_size: config.client_max_body_size,
-        }
     }
 }

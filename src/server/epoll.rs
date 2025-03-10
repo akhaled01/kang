@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::io::{AsRawFd, RawFd};
 
 use crate::http::Request;
 use crate::info;
+use crate::error;
 
 pub const MAX_EVENTS: usize = 1024;
 
@@ -65,35 +66,39 @@ impl EpollListener {
         })
     }
 
-    pub fn accept_connection(&mut self) -> io::Result<()> {
+    pub fn accept_connection(&mut self, global_epoll_fd: RawFd) -> io::Result<()> {
         loop {
             match self.listener.accept() {
                 Ok((stream, addr)) => {
                     stream.set_nonblocking(true)?;
                     let fd = stream.as_raw_fd();
 
-                    //* pass through epoll
+                    // Monitor for read, write, and edge-triggered events
                     let mut event = libc::epoll_event {
-                        events: (libc::EPOLLIN | libc::EPOLLET) as u32,
+                        events: (libc::EPOLLIN | libc::EPOLLOUT | libc::EPOLLET) as u32,
                         u64: fd as u64,
                     };
 
                     if unsafe {
-                        libc::epoll_ctl(self.epoll_fd, libc::EPOLL_CTL_ADD, fd, &mut event)
+                        libc::epoll_ctl(global_epoll_fd, libc::EPOLL_CTL_ADD, fd, &mut event)
                     } < 0
                     {
                         return Err(io::Error::last_os_error());
                     }
 
                     info!("Accepted connection from {:?} fd={}", addr, fd);
-
                     self.connections.insert(fd, stream);
+                    break;
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     // No more connections to accept
+                    info!("No more connections to accept");
                     break;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    error!("Accept error: {}", e);
+                    return Err(e);
+                },
             }
         }
         Ok(())
@@ -101,11 +106,14 @@ impl EpollListener {
 
     pub fn handle_connection(&mut self, fd: RawFd) -> io::Result<Request> {
         let stream = self.connections.get_mut(&fd).unwrap();
-        let mut buffer = [0; 4096];
+        let mut buffer = Vec::new();
+        let mut temp_buf = [0; 4096];
 
+        // In edge-triggered mode, we must read until EAGAIN
         loop {
-            match stream.read(&mut buffer) {
+            match stream.read(&mut temp_buf) {
                 Ok(0) => {
+                    info!("Connection closed by peer fd={}", fd);
                     return Err(io::Error::new(
                         io::ErrorKind::ConnectionAborted,
                         "Connection closed",
@@ -113,29 +121,60 @@ impl EpollListener {
                 }
                 Ok(n) => {
                     info!("Received {} bytes from fd={}", n, fd);
+                    buffer.extend_from_slice(&temp_buf[..n]);
 
-                    // Attempt to parse the HTTP request
-                    let request = crate::http::Request::parse(&buffer[..n]).map_err(|e| {
-                        io::Error::new(io::ErrorKind::InvalidData, format!("Bad request: {}", e))
-                    })?;
+                    // Debug: Print received data
+                    if let Ok(data) = String::from_utf8(buffer.clone()) {
+                        info!("Received data: {}", data);
+                    }
 
-                    return Ok(request);
+                    // Try to parse what we have so far
+                    match crate::http::Request::parse(&buffer) {
+                        Ok(request) => {
+                            info!("Successfully parsed HTTP request for fd={}", fd);
+                            return Ok(request);
+                        }
+                        Err(e) => {
+                            info!("Failed to parse request: {} for fd={}", e, fd);
+                        }
+                    }
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    info!("WouldBlock on fd={}, buffer size={}", fd, buffer.len());
                     break;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    error!("Read error on fd={}: {}", fd, e);
+                    return Err(e);
+                }
             }
         }
 
+        // If we have data but couldn't parse a complete request, keep waiting
+        if !buffer.is_empty() {
+            info!("Incomplete request on fd={}, waiting for more data", fd);
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Incomplete request",
+            ));
+        }
+
+        info!("No data received on fd={}", fd);
         Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
             "No valid request received",
         ))
     }
 
-    pub fn remove_connection(&mut self, fd: RawFd) -> io::Result<()> {
-        if unsafe { libc::epoll_ctl(self.epoll_fd, libc::EPOLL_CTL_DEL, fd, std::ptr::null_mut()) }
+    // writes a response to a specified fd
+    pub fn send_bytes(&self, bytes: Vec<u8>, fd: RawFd) -> io::Result<()> {
+        let mut stream = self.connections.get(&fd).unwrap();
+        stream.write_all(&bytes)?;
+        Ok(())
+    }
+
+    pub fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()> {
+        if unsafe { libc::epoll_ctl(global_epoll_fd, libc::EPOLL_CTL_DEL, fd, std::ptr::null_mut()) }
             < 0
         {
             return Err(io::Error::last_os_error());

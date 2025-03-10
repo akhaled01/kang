@@ -2,19 +2,23 @@ use std::fmt::Write;
 
 use crate::http::Headers;
 
+use super::status::StatusCode;
+
 #[derive(Debug)]
 pub struct Response {
-    status_code: u16,
+    status_code: StatusCode,
     status_text: String,
     headers: Headers,
     body: Vec<u8>,
 }
 
 impl Response {
-    pub fn new(status_code: u16, status_text: &str) -> Self {
+    pub fn new(status_code: StatusCode) -> Self {
+        let status_text = status_code.to_text();
+
         let mut response = Response {
             status_code,
-            status_text: status_text.to_string(),
+            status_text,
             headers: Headers::new(),
             body: Vec::new(),
         };
@@ -26,8 +30,8 @@ impl Response {
         response
     }
 
-    pub fn status_code(&self) -> u16 {
-        self.status_code
+    pub fn status_code(&self) -> &StatusCode {
+        &self.status_code
     }
 
     pub fn status_text(&self) -> &str {
@@ -57,7 +61,7 @@ impl Response {
 
     // Create a file upload success response
     pub fn file_upload_success(file_count: usize) -> Self {
-        let mut response = Response::new(200, "OK");
+        let mut response = Response::new(StatusCode::Ok);
         let body = format!("Successfully uploaded {} files", file_count);
         response.set_header("Content-Type", "text/plain");
         response.set_body_string(&body);
@@ -65,8 +69,8 @@ impl Response {
     }
 
     // Create a file upload error response
-    pub fn file_upload_error(status_code: u16, message: &str) -> Self {
-        let mut response = Response::new(status_code, status_code_to_text(status_code));
+    pub fn file_upload_error(status_code: StatusCode, message: &str) -> Self {
+        let mut response = Response::new(status_code);
         let body = message.to_string();
         response.set_header("Content-Type", "text/plain");
         response.set_body_string(&body);
@@ -78,7 +82,13 @@ impl Response {
         let mut response_text = String::new();
 
         // Status line
-        writeln!(response_text, "HTTP/1.1 {} {}\r", self.status_code, self.status_text).unwrap();
+        writeln!(
+            response_text,
+            "HTTP/1.1 {} {}\r",
+            self.status_code as u16, // Convert enum to u16 for the status code
+            self.status_text
+        )
+        .unwrap();
 
         // Headers
         for (key, value) in self.headers.iter() {
@@ -92,23 +102,5 @@ impl Response {
         let mut response_bytes = response_text.into_bytes();
         response_bytes.extend_from_slice(&self.body);
         response_bytes
-    }
-}
-
-// Helper function to convert status code to text
-fn status_code_to_text(code: u16) -> &'static str {
-    match code {
-        200 => "OK",
-        201 => "Created",
-        204 => "No Content",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        405 => "Method Not Allowed",
-        413 => "Payload Too Large",
-        500 => "Internal Server Error",
-        501 => "Not Implemented",
-        _ => "Unknown",
     }
 }
