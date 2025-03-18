@@ -38,12 +38,11 @@
           "path": "/old-docs",
           "redirect": {
             "url": "/docs",
-            "code": 301
+            "code": 302
           }
         },
         {
           "path": "/cgi-bin",
-          "root": "/usr/local/cgi-bin",
           "methods": ["GET", "POST"],
           "cgi": {
             ".php": "/usr/bin/php-cgi",

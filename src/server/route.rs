@@ -23,9 +23,9 @@ pub struct Redirect {
 
 impl Route {
     pub fn handle(&self) -> Response {
-        if let Some(_redirect) = &self.redirect {
+        if let Some(_) = &self.redirect {
             return self.handle_redirect();
-        } else if let Some(_cgi) = &self.cgi {
+        } else if let Some(_) = &self.cgi {
             return self.handle_cgi();
         } else {
             return self.handle_static();
