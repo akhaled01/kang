@@ -12,19 +12,20 @@ pub enum ConfigError {
     ParseError(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub global: GlobalConfig,
     pub servers: Vec<ServerConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GlobalConfig {
     pub error_pages: ErrorPages,
-    pub client_max_body_size: String,
+    pub client_max_body_size: Option<String>,
+    pub response_format: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ErrorPages {
     pub root: String,
     #[serde(rename = "404")]
@@ -74,7 +75,7 @@ impl Config {
     pub fn create_servers(&self) -> Vec<Server> {
         self.servers
             .iter()
-            .map(|server_config| Server::new(server_config.clone()))
+            .map(|server_config| Server::new(server_config.clone(), self.clone()))
             .collect()
     }
 }

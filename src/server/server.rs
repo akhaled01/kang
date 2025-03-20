@@ -5,6 +5,7 @@ use std::{collections::HashMap, io};
 use crate::server::epoll::MAX_EVENTS;
 use crate::server::route::Route;
 use crate::{error, info, warn};
+use crate::config::{ServerConfig, Config};
 
 use super::EpollListener;
 
@@ -19,15 +20,15 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(config: crate::config::ServerConfig) -> Self {
+    pub fn new(server_config: ServerConfig, config: Config) -> Self {
         Self {
             listeners: HashMap::new(),
-            server_name: config.server_name,
-            host: config.host,
-            ports: config.ports,
-            is_default: config.is_default,
-            routes: config.routes.into_iter().map(Route::from).collect(),
-            client_max_body_size: config.client_max_body_size,
+            server_name: server_config.server_name,
+            host: server_config.host,
+            ports: server_config.ports,
+            is_default: server_config.is_default,
+            routes: server_config.routes.into_iter().map(|r| Route::from((r, config.clone()))).collect(),
+            client_max_body_size: server_config.client_max_body_size,
         }
     }
 
@@ -110,27 +111,27 @@ impl Server {
                             if events & libc::EPOLLIN as u32 != 0 {
                                 match listener.handle_connection(fd) {
                                     Ok(req) => {
-                                        // Find matching route
+                                        // Find matching route by checking path prefixes
                                         let route = self
                                             .routes
                                             .iter()
-                                            .find(|r| r.path == req.path())
+                                            .filter(|r| req.path().starts_with(&r.path))
+                                            .max_by_key(|r| r.path.len())
                                             .unwrap_or_else(|| &self.routes[0]);
 
                                         info!("Handling route: {}", route.path);
 
                                         // Process request and send response
-                                        let response = route.handle();
+                                        let response = route.handle(req);
                                         match listener.send_bytes(response.to_bytes(), fd) {
                                             Ok(_) => {
                                                 info!("Response sent successfully to fd={}", fd);
-                                                let _ = listener.remove_connection(fd, epoll_fd);
                                             }
                                             Err(e) => {
                                                 error!("Failed to send response: {}", e);
-                                                let _ = listener.remove_connection(fd, epoll_fd);
                                             }
                                         }
+                                        let _ = listener.remove_connection(fd, epoll_fd);
                                     }
                                     Err(e) => {
                                         match e.kind() {

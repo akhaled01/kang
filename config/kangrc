@@ -1,60 +1,94 @@
 {
   "global": {
+    "response_format": "html",
     "error_pages": {
       "root": "/etc/kang/error_pages",
       "404": "404.html",
       "500": "500.html"
     },
-    "client_max_body_size": "10M"
+    "client_max_body_size": "10M",
+    "cgi": {
+      ".php": "/usr/bin/php"
+    }
   },
   "servers": [
     {
-      "server_name": ["api.example.com"],
+      "server_name": [
+        "api.example.com"
+      ],
       "host": "127.0.0.1",
-      "ports": [8080, 8443],
+      "ports": [
+        8080,
+        8443
+      ],
       "is_default": true,
       "routes": [
         {
           "path": "/",
           "root": "/var/www/api",
           "index": "index.html",
-          "methods": ["GET", "POST"],
+          "methods": [
+            "GET",
+            "POST"
+          ],
           "directory_listing": false
         },
         {
           "path": "/uploads",
           "root": "/var/www/uploads",
-          "methods": ["POST", "PUT"],
+          "methods": [
+            "POST",
+            "PUT"
+          ],
           "client_max_body_size": "100M"
         }
       ]
     },
     {
-      "server_name": ["www.example.com", "example.com"],
+      "server_name": [
+        "www.example.com",
+        "example.com"
+      ],
       "host": "127.0.0.1",
-      "ports": [9090],
+      "ports": [
+        9090
+      ],
       "routes": [
         {
+          "path": "/",
+          "root": "./static/",
+          "index": "index.html",
+          "methods": [
+            "GET"
+          ]
+        },
+        {
           "path": "/old-docs",
+          "methods": [
+            "GET"
+          ],
           "redirect": {
             "url": "/docs",
             "code": 302
           }
         },
         {
-          "path": "/cgi-bin",
-          "methods": ["GET", "POST"],
-          "cgi": {
-            ".php": "/usr/bin/php-cgi",
-            ".py": "/usr/bin/python3"
-          }
+          "path": "/docs",
+          "root": "/var/www/docs",
+          "index": "index.html",
+          "methods": [
+            "GET"
+          ],
+          "directory_listing": true
         },
         {
           "path": "/files",
           "root": "/var/www/files",
           "index": "index.html",
           "directory_listing": true,
-          "methods": ["GET"]
+          "methods": [
+            "GET"
+          ]
         }
       ]
     }

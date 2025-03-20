@@ -4,51 +4,71 @@ use std::str;
 use crate::http::headers::Headers;
 use crate::http::upload::MultipartFormData;
 
-#[derive(Debug, Clone)]
-pub enum Method {
-    GET,
-    POST,
-    DELETE,
-    UNKNOWN(String),
-}
+use crate::http::methods::Method;
 
-impl Method {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Method::GET => "GET",
-            Method::POST => "POST",
-            Method::DELETE => "DELETE",
-            Method::UNKNOWN(s) => s,
-        }
-    }
-
-    pub fn from_str(s: &str) -> Self {
-        match s.to_uppercase().as_str() {
-            "GET" => Method::GET,
-            "POST" => Method::POST,
-            "DELETE" => Method::DELETE,
-            _ => Method::UNKNOWN(s.to_string()),
-        }
-    }
-}
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Request {
     method: Method,
     path: String,
+    query_params: HashMap<String, String>,
     version: String,
     headers: Headers,
     body: Vec<u8>,
+    chunked: bool,
+    keep_alive: bool,
 }
 
 impl Request {
+    fn parse_query_params(path: &str) -> (String, HashMap<String, String>) {
+        let mut params = HashMap::new();
+        if let Some((base_path, query)) = path.split_once('?') {
+            for param in query.split('&') {
+                if let Some((key, value)) = param.split_once('=') {
+                    params.insert(
+                        urlencoding::decode(key)
+                            .unwrap_or_else(|_| key.into())
+                            .into_owned(),
+                        urlencoding::decode(value)
+                            .unwrap_or_else(|_| value.into())
+                            .into_owned(),
+                    );
+                }
+            }
+            (base_path.to_string(), params)
+        } else {
+            (path.to_string(), params)
+        }
+    }
+
+    pub fn query_param(&self, key: &str) -> Option<&String> {
+        self.query_params.get(key)
+    }
+
+    pub fn query_params(&self) -> &HashMap<String, String> {
+        &self.query_params
+    }
+
+    pub fn is_chunked(&self) -> bool {
+        self.chunked
+    }
+
+    pub fn is_keep_alive(&self) -> bool {
+        self.keep_alive
+    }
+
     pub fn new(method: Method, path: &str, version: &str) -> Self {
+        let (path, query_params) = Self::parse_query_params(path);
         Request {
             method,
-            path: path.to_string(),
+            path,
+            query_params,
             version: version.to_string(),
             headers: Headers::new(),
             body: Vec::new(),
+            chunked: false,
+            keep_alive: false,
         }
     }
 
@@ -131,7 +151,16 @@ impl Request {
         // Parse headers
         if lines.len() > 1 {
             let headers = Headers::parse(&lines[1..]);
-            request.set_headers(headers);
+            request.set_headers(headers.clone());
+            // Check transfer encoding and connection headers
+            request.chunked = headers.get("Transfer-Encoding")
+                .map(|v| v.to_lowercase().contains("chunked"))
+                .unwrap_or(false);
+            
+            request.keep_alive = match headers.get("Connection") {
+                Some(conn) => conn.to_lowercase().contains("keep-alive"),
+                None => request.version.contains("1.1"), // HTTP/1.1 defaults to keep-alive
+            };
         }
 
         // Set the body as raw bytes (don't try to parse as UTF-8)
