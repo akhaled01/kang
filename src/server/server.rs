@@ -5,7 +5,7 @@ use std::{collections::HashMap, io};
 use crate::server::epoll::MAX_EVENTS;
 use crate::server::route::Route;
 use crate::{error, info, warn};
-use crate::config::{ServerConfig, Config};
+use crate::config::config::{ServerConfig, Config};
 
 use super::EpollListener;
 

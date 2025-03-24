@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use crate::http::Headers;
 
-use super::status::StatusCode;
+use super::{cookies::Cookie, status::StatusCode};
 
 #[derive(Debug)]
 pub struct Response {
@@ -50,6 +50,10 @@ impl Response {
         self.headers.add(key, value);
     }
 
+    pub fn set_cookie(&mut self, cookie: Cookie) {
+        self.headers.add("Set-Cookie", &cookie.to_string());
+    }
+
     pub fn set_body(&mut self, body: Vec<u8>) {
         self.body = body;
         self.set_header("Content-Length", &self.body.len().to_string());
@@ -57,24 +61,6 @@ impl Response {
 
     pub fn set_body_string(&mut self, body: &str) {
         self.set_body(body.as_bytes().to_vec());
-    }
-
-    // Create a file upload success response
-    pub fn file_upload_success(file_count: usize) -> Self {
-        let mut response = Response::new(StatusCode::Ok);
-        let body = format!("Successfully uploaded {} files", file_count);
-        response.set_header("Content-Type", "text/plain");
-        response.set_body_string(&body);
-        response
-    }
-
-    // Create a file upload error response
-    pub fn file_upload_error(status_code: StatusCode, message: &str) -> Self {
-        let mut response = Response::new(status_code);
-        let body = message.to_string();
-        response.set_header("Content-Type", "text/plain");
-        response.set_body_string(&body);
-        response
     }
 
     // Convert response to bytes
@@ -85,15 +71,14 @@ impl Response {
         writeln!(
             response_text,
             "HTTP/1.1 {} {}\r",
-            self.status_code as u16, // Convert enum to u16 for the status code
+            self.status_code as u16,
             self.status_text
         )
         .unwrap();
 
-        // Headers
-        for (key, value) in self.headers.iter() {
+        self.headers.iter().for_each(|(key, value)| {
             writeln!(response_text, "{}: {}\r", key, value).unwrap();
-        }
+        });
 
         // Empty line to separate headers from body
         writeln!(response_text, "\r").unwrap();

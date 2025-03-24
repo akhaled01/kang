@@ -4,7 +4,7 @@ use serde_json::json;
 
 use crate::http::status::StatusCode;
 use crate::http::Response;
-use crate::config::Config;
+use crate::config::config::Config;
 
 pub struct FileServer;
 

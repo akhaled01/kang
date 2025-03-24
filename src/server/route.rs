@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::{
     cgi::php::PhpExecContext,
-    config::{RouteConfig, Config},
+    config::config::{Config, RouteConfig},
     http::{status::StatusCode, Request, Response},
     http::methods::Method,
     http::upload::UploadHandler

@@ -3,6 +3,10 @@ pub enum Method {
     GET,
     POST,
     DELETE,
+    HEAD,
+    PUT,
+    PATCH,
+    OPTIONS,
     UNKNOWN(String),
 }
 
@@ -12,6 +16,10 @@ impl Method {
             Method::GET => "GET",
             Method::POST => "POST",
             Method::DELETE => "DELETE",
+            Method::HEAD => "HEAD",
+            Method::PUT => "PUT",
+            Method::PATCH => "PATCH",
+            Method::OPTIONS => "OPTIONS",
             Method::UNKNOWN(s) => s,
         }
     }
@@ -21,6 +29,10 @@ impl Method {
             "GET" => Method::GET,
             "POST" => Method::POST,
             "DELETE" => Method::DELETE,
+            "HEAD" => Method::HEAD,
+            "PUT" => Method::PUT,
+            "PATCH" => Method::PATCH,
+            "OPTIONS" => Method::OPTIONS,
             _ => Method::UNKNOWN(s.to_string()),
         }
     }
