@@ -1,15 +1,25 @@
+#[cfg(target_os = "macos")]
 use std::collections::HashMap;
+#[cfg(target_os = "macos")]
 use std::io::{self, Read, Write};
+#[cfg(target_os = "macos")]
 use std::net::{TcpListener, TcpStream};
+#[cfg(target_os = "macos")]
 use std::os::unix::io::{AsRawFd, RawFd};
+#[cfg(target_os = "macos")]
 use std::ptr;
 
+#[cfg(target_os = "macos")]
 use crate::http::Request;
+#[cfg(target_os = "macos")]
 use crate::info;
+#[cfg(target_os = "macos")]
 use crate::error;
 
+#[cfg(target_os = "macos")]
 pub const MAX_EVENTS: usize = 1024;
 
+#[cfg(target_os = "macos")]
 /// TCP listening socket using the kqueue interface.
 ///
 /// It contains a non-blocking listener, a kqueue file descriptor, and a map of connected clients.
@@ -21,6 +31,7 @@ pub struct EpollListener {
     pub connections: HashMap<RawFd, TcpStream>,
 }
 
+#[cfg(target_os = "macos")]
 impl EpollListener {
     /// Creates a new instance of the server.
     ///
@@ -234,6 +245,7 @@ impl EpollListener {
     }
 }
 
+#[cfg(target_os = "macos")]
 impl Drop for EpollListener {
     fn drop(&mut self) {
         unsafe { libc::close(self.epoll_fd) };
