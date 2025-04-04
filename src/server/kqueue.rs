@@ -25,14 +25,14 @@ pub const MAX_EVENTS: usize = 1024;
 /// It contains a non-blocking listener, a kqueue file descriptor, and a map of connected clients.
 /// Each server spawned by kang has its own kqueue listener.
 #[derive(Debug)]
-pub struct EpollListener {
+pub struct KqueueListener {
     pub epoll_fd: RawFd, // kqueue fd
     pub listener: TcpListener,
     pub connections: HashMap<RawFd, TcpStream>,
 }
 
 #[cfg(target_os = "macos")]
-impl EpollListener {
+impl KqueueListener {
     /// Creates a new instance of the server.
     ///
     /// # Arguments
@@ -74,7 +74,7 @@ impl EpollListener {
             return Err(io::Error::last_os_error());
         }
 
-        Ok(EpollListener {
+        Ok(KqueueListener {
             epoll_fd: kq,
             listener,
             connections: HashMap::new(),
@@ -246,7 +246,7 @@ impl EpollListener {
 }
 
 #[cfg(target_os = "macos")]
-impl Drop for EpollListener {
+impl Drop for KqueueListener {
     fn drop(&mut self) {
         unsafe { libc::close(self.epoll_fd) };
         info!("Kqueue listener shutting down");

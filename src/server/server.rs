@@ -1,5 +1,4 @@
 use std::os::fd::RawFd;
-use std::os::unix::io::AsRawFd;
 use std::{collections::HashMap, io};
 
 use crate::config::config::{Config, ServerConfig};
@@ -15,10 +14,11 @@ use libc::{
     epoll_create1, epoll_ctl, epoll_event, epoll_wait, EPOLLET, EPOLLIN, EPOLLOUT, EPOLL_CTL_ADD,
 };
 
-use super::EpollListener;
+#[cfg(target_os = "macos")]
+use super::listener::Listener;
 
 pub struct Server {
-    pub listeners: HashMap<i32, EpollListener>,
+    pub listeners: HashMap<i32, Box<dyn Listener>>,
     pub server_name: Vec<String>,
     pub host: String,
     pub ports: Vec<u16>,
@@ -44,16 +44,16 @@ impl Server {
         }
     }
 
-    pub fn add_listener(&mut self, listener: EpollListener) -> io::Result<()> {
-        let id = listener.epoll_fd;
-        self.listeners.insert(id, listener);
+    pub fn add_listener<T: Listener + 'static + Send + Sync>(&mut self, listener: T) -> io::Result<()> {
+        let id = listener.get_id();
+        self.listeners.insert(id, Box::new(listener));
         Ok(())
     }
 
     pub fn listen_and_serve(&mut self) -> io::Result<()> {
         // Take ownership of the listeners
         let listeners = std::mem::take(&mut self.listeners);
-        let mut listeners: Vec<EpollListener> = listeners.into_values().collect();
+        let mut listeners: Vec<Box<dyn Listener>> = listeners.into_values().collect();
 
         info!(
             "Serving: [{}] at {}:{}",
@@ -77,14 +77,14 @@ impl Server {
             {
                 let mut event = libc::epoll_event {
                     events: (libc::EPOLLIN | libc::EPOLLET) as u32,
-                    u64: listener.listener.as_raw_fd() as u64,
+                    u64: listener.get_id() as u64,
                 };
 
                 if unsafe {
                     libc::epoll_ctl(
                         global_fd,
                         libc::EPOLL_CTL_ADD,
-                        listener.listener.as_raw_fd(),
+                        listener.get_id(),
                         &mut event,
                     )
                 } < 0
@@ -96,7 +96,7 @@ impl Server {
             #[cfg(target_os = "macos")]
             {
                 let changes = libc::kevent {
-                    ident: listener.listener.as_raw_fd() as usize,
+                    ident: listener.get_id() as usize,
                     filter: libc::EVFILT_READ as i16,
                     flags: libc::EV_ADD | libc::EV_ENABLE,
                     fflags: 0,
@@ -178,8 +178,7 @@ impl Server {
                 };
 
                 // Find the corresponding listener
-                if let Some(listener) = listeners.iter_mut().find(|l| l.listener.as_raw_fd() == fd)
-                {
+                if let Some(listener) = listeners.iter_mut().find(|l| l.get_id() == fd) {
                     info!("Accepting New Connections");
                     // New connection available
                     #[cfg(target_os = "linux")]
@@ -197,7 +196,7 @@ impl Server {
                     info!("Handling Existing Connections");
                     // Handle existing connection
                     for listener in listeners.iter_mut() {
-                        if listener.connections.contains_key(&fd) {
+                        if listener.get_id() == fd {
                             // Only process if we have read events
                             #[cfg(target_os = "linux")]
                             let has_read_event = events & libc::EPOLLIN as u32 != 0;
