@@ -8,4 +8,6 @@ pub mod listener;
 
 #[cfg(target_os = "linux")]
 pub use epoll::EpollListener;
+#[cfg(target_os = "macos")]
+pub use kqueue::KqueueListener;
 pub use server::Server;

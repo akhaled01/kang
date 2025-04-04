@@ -3,10 +3,9 @@ use std::{net::TcpListener, thread};
 use super::config::Config;
 use crate::{error, warn};
 #[cfg(target_os = "macos")]
-use crate::server::kqueue::KqueueListener;
+use crate::server::KqueueListener;
 #[cfg(target_os = "linux")]
-use crate::server::epoll::EpollListener;
-use crate::server::listener::Listener;
+use crate::server::EpollListener;
 
 pub struct KangStarter;
 
