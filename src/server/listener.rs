@@ -9,10 +9,10 @@ use crate::server::kqueue::KqueueListener;
 
 /// Trait for a listener. A listener is a TCP listener that handles connections using I/O Multiplexing
 /// On macOS, it uses the `kqueue` interface, and on Linux, it uses the `epoll` interface.
-pub trait Listener {
+pub trait Listener: Send + Sync {
     fn new(addr: &str) -> io::Result<Self>
     where
-        Self: Sized + Send + Sync;
+        Self: Sized;
     fn get_id(&self) -> RawFd;
     fn accept_connection(&mut self, global_epoll_fd: RawFd) -> io::Result<()>;
     fn handle_connection(&mut self, fd: RawFd) -> io::Result<Request>;
@@ -54,7 +54,7 @@ impl Listener for KqueueListener {
     }
 
     fn get_id(&self) -> RawFd {
-        self.epoll_fd
+        self.kqueue_fd
     }
 
     fn accept_connection(&mut self, global_epoll_fd: RawFd) -> io::Result<()> {

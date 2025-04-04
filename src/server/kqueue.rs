@@ -26,7 +26,7 @@ pub const MAX_EVENTS: usize = 1024;
 /// Each server spawned by kang has its own kqueue listener.
 #[derive(Debug)]
 pub struct KqueueListener {
-    pub epoll_fd: RawFd, // kqueue fd
+    pub kqueue_fd: RawFd, // kqueue fd
     pub listener: TcpListener,
     pub connections: HashMap<RawFd, TcpStream>,
 }
@@ -75,13 +75,13 @@ impl KqueueListener {
         }
 
         Ok(KqueueListener {
-            epoll_fd: kq,
+            kqueue_fd: kq,
             listener,
             connections: HashMap::new(),
         })
     }
 
-    pub fn accept_connection(&mut self, global_epoll_fd: RawFd) -> io::Result<()> {
+    pub fn accept_connection(&mut self, global_kqueue_fd: RawFd) -> io::Result<()> {
         loop {
             match self.listener.accept() {
                 Ok((stream, addr)) => {
@@ -110,7 +110,7 @@ impl KqueueListener {
 
                     if unsafe {
                         libc::kevent(
-                            global_epoll_fd,
+                            global_kqueue_fd,
                             changes.as_ptr(),
                             2,
                             ptr::null_mut(),
@@ -248,7 +248,7 @@ impl KqueueListener {
 #[cfg(target_os = "macos")]
 impl Drop for KqueueListener {
     fn drop(&mut self) {
-        unsafe { libc::close(self.epoll_fd) };
+        unsafe { libc::close(self.kqueue_fd) };
         info!("Kqueue listener shutting down");
     }
 }

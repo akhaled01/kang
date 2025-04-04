@@ -1,7 +1,12 @@
 use std::{net::TcpListener, thread};
 
 use super::config::Config;
-use crate::{error, server::listener::Listener, warn};
+use crate::{error, warn};
+#[cfg(target_os = "macos")]
+use crate::server::kqueue::KqueueListener;
+#[cfg(target_os = "linux")]
+use crate::server::epoll::EpollListener;
+use crate::server::listener::Listener;
 
 pub struct KangStarter;
 
@@ -32,7 +37,12 @@ impl KangStarter {
                     }
 
                     let addr = format!("{host}:{port}", host = server.host, port = current_port);
-                    match Listener::new(&addr) {
+                    #[cfg(target_os = "macos")]
+                    let listener_result = KqueueListener::new(&addr);
+                    #[cfg(target_os = "linux")]
+                    let listener_result = EpollListener::new(&addr);
+
+                    match listener_result {
                         Ok(listener) => {
                             if current_port != original_port {
                                 warn!("Port {original_port} was in use, using port {current_port} instead");
