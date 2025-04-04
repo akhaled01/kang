@@ -1,13 +1,9 @@
-use std::os::fd::RawFd;
-use std::{collections::HashMap, io};
-
+use super::listener::{Listener, MAX_EVENTS};
 use crate::config::config::{Config, ServerConfig};
-#[cfg(target_os = "linux")]
-use crate::server::epoll::MAX_EVENTS;
-#[cfg(target_os = "macos")]
-use crate::server::kqueue::MAX_EVENTS;
 use crate::server::route::Route;
 use crate::{error, info, warn};
+use std::os::fd::RawFd;
+use std::{collections::HashMap, io};
 
 #[cfg(target_os = "linux")]
 use libc::{
@@ -15,7 +11,7 @@ use libc::{
 };
 
 #[cfg(target_os = "macos")]
-use super::listener::Listener;
+use libc::{kevent, kqueue, EVFILT_READ, EV_ADD, EV_ENABLE};
 
 pub struct Server {
     pub listeners: HashMap<i32, Box<dyn Listener>>,
@@ -44,7 +40,10 @@ impl Server {
         }
     }
 
-    pub fn add_listener<T: Listener + 'static + Send + Sync>(&mut self, listener: T) -> io::Result<()> {
+    pub fn add_listener<T: Listener + 'static + Send + Sync>(
+        &mut self,
+        listener: T,
+    ) -> io::Result<()> {
         let id = listener.get_id();
         self.listeners.insert(id, Box::new(listener));
         Ok(())
@@ -63,9 +62,9 @@ impl Server {
         );
 
         #[cfg(target_os = "linux")]
-        let global_fd = unsafe { libc::epoll_create1(0) };
+        let global_fd = unsafe { epoll_create1(0) };
         #[cfg(target_os = "macos")]
-        let global_fd = unsafe { libc::kqueue() };
+        let global_fd = unsafe { kqueue() };
 
         if global_fd < 0 {
             return Err(io::Error::last_os_error());
@@ -75,19 +74,12 @@ impl Server {
         for listener in &listeners {
             #[cfg(target_os = "linux")]
             {
-                let mut event = libc::epoll_event {
-                    events: (libc::EPOLLIN | libc::EPOLLET) as u32,
+                let mut event = epoll_event {
+                    events: (EPOLLIN | EPOLLET) as u32,
                     u64: listener.get_id() as u64,
                 };
 
-                if unsafe {
-                    libc::epoll_ctl(
-                        global_fd,
-                        libc::EPOLL_CTL_ADD,
-                        listener.get_id(),
-                        &mut event,
-                    )
-                } < 0
+                if unsafe { epoll_ctl(global_fd, EPOLL_CTL_ADD, listener.get_id(), &mut event) } < 0
                 {
                     return Err(io::Error::last_os_error());
                 }
@@ -95,17 +87,17 @@ impl Server {
 
             #[cfg(target_os = "macos")]
             {
-                let changes = libc::kevent {
+                let changes = kevent {
                     ident: listener.get_id() as usize,
-                    filter: libc::EVFILT_READ as i16,
-                    flags: libc::EV_ADD | libc::EV_ENABLE,
+                    filter: EVFILT_READ as i16,
+                    flags: EV_ADD | EV_ENABLE,
                     fflags: 0,
                     data: 0,
                     udata: std::ptr::null_mut(),
                 };
 
                 if unsafe {
-                    libc::kevent(
+                    kevent(
                         global_fd,
                         &changes,
                         1,
@@ -122,10 +114,10 @@ impl Server {
 
         // Event loop (single thread, handles all listeners)
         #[cfg(target_os = "linux")]
-        let mut events = vec![libc::epoll_event { events: 0, u64: 0 }; MAX_EVENTS];
+        let mut events = vec![epoll_event { events: 0, u64: 0 }; MAX_EVENTS];
         #[cfg(target_os = "macos")]
         let mut events = vec![
-            libc::kevent {
+            kevent {
                 ident: 0,
                 filter: 0,
                 flags: 0,
@@ -138,12 +130,11 @@ impl Server {
 
         loop {
             #[cfg(target_os = "linux")]
-            let nfds =
-                unsafe { libc::epoll_wait(global_fd, events.as_mut_ptr(), MAX_EVENTS as i32, -1) };
+            let nfds = unsafe { epoll_wait(global_fd, events.as_mut_ptr(), MAX_EVENTS as i32, -1) };
 
             #[cfg(target_os = "macos")]
             let nfds = unsafe {
-                libc::kevent(
+                kevent(
                     global_fd,
                     std::ptr::null(),
                     0,
@@ -169,7 +160,7 @@ impl Server {
                     let event = &events[n as usize];
                     (
                         event.ident as RawFd,
-                        if event.filter == libc::EVFILT_READ as i16 {
+                        if event.filter == EVFILT_READ as i16 {
                             1
                         } else {
                             0
@@ -182,7 +173,7 @@ impl Server {
                     info!("Accepting New Connections");
                     // New connection available
                     #[cfg(target_os = "linux")]
-                    let has_read_event = events & libc::EPOLLIN as u32 != 0;
+                    let has_read_event = events & EPOLLIN as u32 != 0;
                     #[cfg(target_os = "macos")]
                     let has_read_event = events != 0;
 
@@ -199,7 +190,7 @@ impl Server {
                         if listener.get_id() == fd {
                             // Only process if we have read events
                             #[cfg(target_os = "linux")]
-                            let has_read_event = events & libc::EPOLLIN as u32 != 0;
+                            let has_read_event = events & EPOLLIN as u32 != 0;
                             #[cfg(target_os = "macos")]
                             let has_read_event = events != 0;
 

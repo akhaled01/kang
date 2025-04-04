@@ -17,9 +17,6 @@ use crate::info;
 use crate::error;
 
 #[cfg(target_os = "macos")]
-pub const MAX_EVENTS: usize = 1024;
-
-#[cfg(target_os = "macos")]
 /// TCP listening socket using the kqueue interface.
 ///
 /// It contains a non-blocking listener, a kqueue file descriptor, and a map of connected clients.

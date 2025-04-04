@@ -18,9 +18,6 @@ use crate::error;
 use libc::{EPOLLIN, EPOLLOUT, EPOLLET, EPOLL_CTL_ADD, EPOLL_CTL_DEL, epoll_event, epoll_create1, epoll_ctl};
 
 #[cfg(target_os = "linux")]
-pub const MAX_EVENTS: usize = 1024;
-
-#[cfg(target_os = "linux")]
 /// TCP listening socket using the epoll interface.
 ///
 /// It contains a non-blocking listener, an epoll file descriptor, and a map of connected clients.

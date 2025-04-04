@@ -7,6 +7,8 @@ use crate::server::epoll::EpollListener;
 #[cfg(target_os = "macos")]
 use crate::server::kqueue::KqueueListener;
 
+pub const MAX_EVENTS: usize = 1024;
+
 /// Trait for a listener. A listener is a TCP listener that handles connections using I/O Multiplexing
 /// On macOS, it uses the `kqueue` interface, and on Linux, it uses the `epoll` interface.
 pub trait Listener: Send + Sync {
