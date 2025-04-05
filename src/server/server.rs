@@ -1,7 +1,7 @@
 use super::listener::{Listener, MAX_EVENTS};
 use crate::config::config::{Config, ServerConfig};
 use crate::server::route::Route;
-use crate::{error, info, warn};
+use crate::{debug, error, info, warn};
 use std::os::fd::RawFd;
 use std::{collections::HashMap, io};
 
@@ -156,84 +156,97 @@ impl Server {
                 };
 
                 #[cfg(target_os = "macos")]
-                let (fd, events) = {
+                let (fd, event_filter, event_data) = {
+                    debug!("Event: {:?}", events[n as usize]);
                     let event = &events[n as usize];
-                    (
-                        event.ident as RawFd,
-                        if event.filter == EVFILT_READ as i16 {
-                            1
-                        } else {
-                            0
-                        },
-                    )
+                    (event.ident as RawFd, event.filter, event.data)
                 };
 
-                // Find the corresponding listener
+                debug!("Event on fd={}, filter={}, data={}", fd, event_filter, event_data);
+                // First check if this is a listener socket
                 if let Some(listener) = listeners.iter_mut().find(|l| l.get_id() == fd) {
-                    info!("Accepting New Connections");
-                    // New connection available
+                    debug!("accepting new connection");
                     #[cfg(target_os = "linux")]
                     let has_read_event = events & EPOLLIN as u32 != 0;
                     #[cfg(target_os = "macos")]
-                    let has_read_event = events != 0;
+                    let has_read_event = event_filter == EVFILT_READ as i16;
 
                     if has_read_event {
                         match listener.accept_connection(global_fd) {
                             Ok(_) => (),
+                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                                // No more connections to accept
+                                continue;
+                            }
                             Err(e) => error!("Accept error: {}", e),
                         }
                     }
                 } else {
-                    info!("Handling Existing Connections");
-                    // Handle existing connection
+                    // This is a connected socket
+                    let mut handled = false;
                     for listener in listeners.iter_mut() {
-                        if listener.get_id() == fd {
-                            // Only process if we have read events
-                            #[cfg(target_os = "linux")]
-                            let has_read_event = events & EPOLLIN as u32 != 0;
-                            #[cfg(target_os = "macos")]
-                            let has_read_event = events != 0;
+                        debug!("checking listener {} for fd={}", listener.get_id(), fd);
+                        #[cfg(target_os = "linux")]
+                        let has_read_event = events & EPOLLIN as u32 != 0;
+                        #[cfg(target_os = "macos")]
+                        let has_read_event = event_filter == EVFILT_READ as i16 && event_data > 0;
 
-                            if has_read_event {
-                                match listener.handle_connection(fd) {
-                                    Ok(req) => {
-                                        // Find matching route by checking path prefixes
-                                        let route = self
-                                            .routes
-                                            .iter()
-                                            .filter(|r| req.path().starts_with(&r.path))
-                                            .max_by_key(|r| r.path.len())
-                                            .unwrap_or_else(|| &self.routes[0]);
+                        if has_read_event {
+                            match listener.handle_connection(fd) {
+                                Ok(req) => {
+                                    // Find matching route by checking path prefixes
+                                    let route = self
+                                        .routes
+                                        .iter()
+                                        .filter(|r| req.path().starts_with(&r.path))
+                                        .max_by_key(|r| r.path.len())
+                                        .unwrap_or_else(|| &self.routes[0]);
 
-                                        info!("Handling route: {}", route.path);
+                                    info!("Handling route: {}", route.path);
 
-                                        // Process request and send response
-                                        let response = route.handle(req);
-                                        match listener.send_bytes(response.to_bytes(), fd) {
-                                            Ok(_) => {
-                                                info!("Response sent successfully to fd={}", fd);
-                                            }
-                                            Err(e) => {
-                                                error!("Failed to send response: {}", e);
-                                            }
+                                    // Process request and send response
+                                    let response = route.handle(req);
+                                    match listener.send_bytes(response.to_bytes(), fd) {
+                                        Ok(_) => {
+                                            info!("Response sent successfully to fd={}", fd);
+                                            handled = true;
+                                            let _ = listener.remove_connection(fd, global_fd);
+                                            break;
                                         }
-                                        let _ = listener.remove_connection(fd, global_fd);
+                                        Err(e) => {
+                                            error!("Failed to send response: {}", e);
+                                            handled = true;
+                                            let _ = listener.remove_connection(fd, global_fd);
+                                            break;
+                                        }
                                     }
-                                    Err(e) => {
-                                        match e.kind() {
-                                            io::ErrorKind::WouldBlock => {
-                                                // Not enough data yet, keep connection open
-                                                info!("Waiting for more data on fd={}", fd);
-                                            }
-                                            _ => {
-                                                warn!("Connection error: {}", e);
-                                                let _ = listener.remove_connection(fd, global_fd);
-                                            }
+                                }
+                                Err(e) => {
+                                    error!("Failed to handle connection: {}", e);
+                                    match e.kind() {
+                                        io::ErrorKind::WouldBlock => {
+                                            // Not enough data yet, keep connection open
+                                            info!("Waiting for more data on fd={}", fd);
+                                            handled = true;
+                                            break;
+                                        }
+                                        _ => {
+                                            warn!("Connection error: {}", e);
+                                            handled = true;
+                                            let _ = listener.remove_connection(fd, global_fd);
+                                            break;
                                         }
                                     }
                                 }
                             }
-                            break;
+                        }
+                    }
+                    
+                    // If no listener handled this fd, remove it from all listeners
+                    if !handled {
+                        debug!("No listener handled fd={}, removing from all", fd);
+                        for listener in listeners.iter_mut() {
+                            let _ = listener.remove_connection(fd, global_fd);
                         }
                     }
                 }

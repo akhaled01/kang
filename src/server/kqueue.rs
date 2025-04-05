@@ -10,11 +10,13 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
 
 #[cfg(target_os = "macos")]
+use crate::error;
+#[cfg(target_os = "macos")]
 use crate::http::Request;
 #[cfg(target_os = "macos")]
 use crate::info;
-#[cfg(target_os = "macos")]
-use crate::error;
+
+use super::listener::Listener;
 
 #[cfg(target_os = "macos")]
 /// TCP listening socket using the kqueue interface.
@@ -58,16 +60,7 @@ impl KqueueListener {
             udata: ptr::null_mut(),
         };
 
-        if unsafe {
-            libc::kevent(
-                kq,
-                &changes,
-                1,
-                ptr::null_mut(),
-                0,
-                ptr::null(),
-            )
-        } < 0 {
+        if unsafe { libc::kevent(kq, &changes, 1, ptr::null_mut(), 0, ptr::null()) } < 0 {
             return Err(io::Error::last_os_error());
         }
 
@@ -77,66 +70,63 @@ impl KqueueListener {
             connections: HashMap::new(),
         })
     }
+}
 
-    pub fn accept_connection(&mut self, global_kqueue_fd: RawFd) -> io::Result<()> {
-        loop {
-            match self.listener.accept() {
-                Ok((stream, addr)) => {
-                    stream.set_nonblocking(true)?;
-                    let fd = stream.as_raw_fd();
+#[cfg(target_os = "macos")]
+impl Listener for KqueueListener {
+    fn new(addr: &str) -> io::Result<Self> {
+        KqueueListener::new(addr)
+    }
+    fn accept_connection(&mut self, global_kqueue_fd: RawFd) -> io::Result<()> {
+        // Only try once, since we're in non-blocking mode and got a read event
+        match self.listener.accept() {
+            Ok((stream, addr)) => {
+                stream.set_nonblocking(true)?;
+                let fd = stream.as_raw_fd();
 
-                    // Monitor for read and write events
-                    let changes = [
-                        libc::kevent {
-                            ident: fd as usize,
-                            filter: libc::EVFILT_READ as i16,
-                            flags: libc::EV_ADD | libc::EV_ENABLE,
-                            fflags: 0,
-                            data: 0,
-                            udata: ptr::null_mut(),
-                        },
-                        libc::kevent {
-                            ident: fd as usize,
-                            filter: libc::EVFILT_WRITE as i16,
-                            flags: libc::EV_ADD | libc::EV_ENABLE,
-                            fflags: 0,
-                            data: 0,
-                            udata: ptr::null_mut(),
-                        },
-                    ];
+                // Monitor for read events only
+                let changes = [
+                    libc::kevent {
+                        ident: fd as usize,
+                        filter: libc::EVFILT_READ as i16,
+                        flags: libc::EV_ADD | libc::EV_ENABLE,
+                        fflags: 0,
+                        data: 0,
+                        udata: ptr::null_mut(),
+                    },
+                ];
 
-                    if unsafe {
-                        libc::kevent(
-                            global_kqueue_fd,
-                            changes.as_ptr(),
-                            2,
-                            ptr::null_mut(),
-                            0,
-                            ptr::null(),
-                        )
-                    } < 0 {
-                        return Err(io::Error::last_os_error());
-                    }
-
-                    info!("Accepted connection from {:?} fd={}", addr, fd);
-                    self.connections.insert(fd, stream);
-                    break;
+                if unsafe {
+                    libc::kevent(
+                        global_kqueue_fd,
+                        changes.as_ptr(),
+                        1,
+                        ptr::null_mut(),
+                        0,
+                        ptr::null(),
+                    )
+                } < 0
+                {
+                    return Err(io::Error::last_os_error());
                 }
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    // No more connections to accept
-                    info!("No more connections to accept");
-                    break;
-                }
-                Err(e) => {
-                    error!("Accept error: {}", e);
-                    return Err(e);
-                },
+
+                info!("Accepted connection from {:?} fd={}", addr, fd);
+                self.connections.insert(fd, stream);
+                return Ok(());
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                // No more connections to accept
+                info!("No more connections to accept");
+                return Ok(());
+            }
+            Err(e) => {
+                error!("Accept error: {}", e);
+                return Err(e);
             }
         }
-        Ok(())
     }
 
-    pub fn handle_connection(&mut self, fd: RawFd) -> io::Result<Request> {
+    fn handle_connection(&mut self, fd: RawFd) -> io::Result<Request> {
         let stream = self.connections.get_mut(&fd).unwrap();
         let mut buffer = Vec::new();
         let mut temp_buf = [0; 4096];
@@ -197,25 +187,17 @@ impl KqueueListener {
         ))
     }
 
-    pub fn send_bytes(&self, bytes: Vec<u8>, fd: RawFd) -> io::Result<()> {
+    fn send_bytes(&self, bytes: Vec<u8>, fd: RawFd) -> io::Result<()> {
         let mut stream = self.connections.get(&fd).unwrap();
         stream.write_all(&bytes)?;
         Ok(())
     }
 
-    pub fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()> {
+    fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()> {
         let changes = [
             libc::kevent {
                 ident: fd as usize,
                 filter: libc::EVFILT_READ as i16,
-                flags: libc::EV_DELETE,
-                fflags: 0,
-                data: 0,
-                udata: ptr::null_mut(),
-            },
-            libc::kevent {
-                ident: fd as usize,
-                filter: libc::EVFILT_WRITE as i16,
                 flags: libc::EV_DELETE,
                 fflags: 0,
                 data: 0,
@@ -227,18 +209,23 @@ impl KqueueListener {
             libc::kevent(
                 global_epoll_fd,
                 changes.as_ptr(),
-                2,
+                1,
                 ptr::null_mut(),
                 0,
                 ptr::null(),
             )
-        } < 0 {
+        } < 0
+        {
             return Err(io::Error::last_os_error());
         }
 
         self.connections.remove(&fd);
         info!("Connection removed: fd={}", fd);
         Ok(())
+    }
+
+    fn get_id(&self) -> RawFd {
+        self.listener.as_raw_fd()
     }
 }
 
