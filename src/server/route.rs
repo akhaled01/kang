@@ -6,19 +6,19 @@ use std::path::PathBuf;
 use crate::{
     cgi::php::PhpExecContext,
     config::config::{Config, RouteConfig},
-    http::{status::StatusCode, Request, Response},
     http::methods::Method,
-    http::upload::UploadHandler
+    http::upload::UploadHandler,
+    http::{status::StatusCode, Request, Response},
 };
 
 pub struct Route {
     pub path: String,
     pub root: Option<String>,
     pub index: Option<String>,
+    pub cgi: Option<HashMap<String, String>>,
     pub methods: Vec<String>,
     pub directory_listing: bool,
     pub redirect: Option<Redirect>,
-    pub cgi: Option<HashMap<String, String>>,
     pub client_max_body_size: Option<String>,
     pub config: Config,
 }
@@ -100,6 +100,41 @@ impl Route {
     }
 
     fn handle_static(&self, request: Request) -> Response {
+        // Check if path ends with .php for CGI handling
+        if request.path().ends_with(".php") {
+            // Get global CGI config
+            let cgi_config = &self.config.global.cgi;
+
+            // Get PHP handler from global config
+            let php_handler = match cgi_config.get(".php") {
+                Some(handler) => handler,
+                None => return Response::new(StatusCode::NotImplemented),
+            };
+
+            // Get script path
+            let base_path = match &self.root {
+                Some(root) => root,
+                None => return Response::new(StatusCode::InternalServerError),
+            };
+
+            let script_path = format!("{}{}", base_path, request.path());
+
+            // Check if script exists
+            if !Path::new(&script_path).exists() {
+                return Response::new(StatusCode::NotFound);
+            }
+
+            // Create PHP execution context
+            let mut php_ctx = PhpExecContext::new(php_handler.to_string(), script_path);
+            php_ctx.add_env("REQUEST_METHOD", request.method().as_str());
+
+            // Execute PHP script
+            match php_ctx.exec() {
+                Ok(output) => return Response::from(output),
+                Err(_) => return Response::new(StatusCode::InternalServerError),
+            }
+        }
+
         // Handle file upload for POST requests
         if request.method() == &Method::POST {
             if !request.has_file_upload() {

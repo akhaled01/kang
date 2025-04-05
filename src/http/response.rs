@@ -71,8 +71,7 @@ impl Response {
         writeln!(
             response_text,
             "HTTP/1.1 {} {}\r",
-            self.status_code as u16,
-            self.status_text
+            self.status_code as u16, self.status_text
         )
         .unwrap();
 
@@ -87,5 +86,28 @@ impl Response {
         let mut response_bytes = response_text.into_bytes();
         response_bytes.extend_from_slice(&self.body);
         response_bytes
+    }
+}
+
+impl From<String> for Response {
+    fn from(content: String) -> Self {
+        let mut response = Response::new(StatusCode::Ok);
+        
+        // Split headers and body on double CRLF
+        if let Some((headers, body)) = content.split_once("\r\n\r\n") {
+            // Parse headers
+            for line in headers.lines() {
+                if let Some((key, value)) = line.split_once(": ") {
+                    response.set_header(key, value);
+                }
+            }
+            response.set_body_string(body);
+        } else {
+            // No headers found, treat everything as body
+            response.set_header("Content-Type", "text/html");
+            response.set_body_string(&content);
+        }
+        
+        response
     }
 }

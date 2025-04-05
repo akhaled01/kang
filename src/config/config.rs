@@ -23,6 +23,7 @@ pub struct GlobalConfig {
     pub error_pages: ErrorPages,
     pub client_max_body_size: Option<String>,
     pub response_format: Option<String>,
+    pub cgi: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
