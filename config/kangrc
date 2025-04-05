@@ -8,7 +8,7 @@
     },
     "client_max_body_size": "10M",
     "cgi": {
-      ".php": "/usr/bin/php"
+      ".php": "/opt/homebrew/bin/php-cgi"
     }
   },
   "servers": [
@@ -74,7 +74,7 @@
         },
         {
           "path": "/docs",
-          "root": "/var/www/docs",
+          "root": "./static/docs",
           "index": "index.html",
           "methods": [
             "GET"
