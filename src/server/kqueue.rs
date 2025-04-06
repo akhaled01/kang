@@ -144,13 +144,8 @@ impl Listener for KqueueListener {
                     info!("Received {} bytes from fd={}", n, fd);
                     buffer.extend_from_slice(&temp_buf[..n]);
 
-                    // Debug: Print received data
-                    if let Ok(data) = String::from_utf8(buffer.clone()) {
-                        info!("Received data: {}", data);
-                    }
-
                     // Try to parse what we have so far
-                    match crate::http::Request::parse(&buffer) {
+                    match Request::parse(&buffer) {
                         Ok(request) => {
                             info!("Successfully parsed HTTP request for fd={}", fd);
                             return Ok(request);

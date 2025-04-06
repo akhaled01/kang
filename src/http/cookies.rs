@@ -14,15 +14,23 @@ pub struct Cookie {
 }
 
 impl Cookie {
-    pub fn new(name: &str, value: &str) -> Self {
+    pub fn new(
+        name: &str,
+        value: &str,
+        expires: Option<DateTime<Utc>>,
+        path: Option<&str>,
+        domain: Option<&str>,
+        secure: Option<bool>,
+        http_only: Option<bool>,
+    ) -> Self {
         Cookie {
             name: name.to_string(),
             value: value.to_string(),
-            expires: None,
-            path: None,
-            domain: None,
-            secure: None,
-            http_only: None,
+            expires: expires.map(|d| d.to_rfc2822()),
+            path: path.map(|p| p.to_string()),
+            domain: domain.map(|d| d.to_string()),
+            secure,
+            http_only,
         }
     }
 
@@ -85,6 +93,6 @@ impl fmt::Display for Cookie {
 
 impl From<(&str, &str)> for Cookie {
     fn from(value: (&str, &str)) -> Self {
-        Cookie::new(value.0, value.1)
+        Cookie::new(value.0, value.1, None, None, None, None, None)
     }
 }

@@ -234,20 +234,8 @@
         <div class="card">
             <h2>Session Information</h2>
             <div class="info-row">
-                <div class="info-label">Session ID:</div>
-                <div class="info-value" id="session-id">kang_sess_8f7d6c5e4b3a2c1d0e9f8a7b6c5d4e3f</div>
-            </div>
-            <div class="info-row">
                 <div class="info-label">Cookie Value:</div>
-                <div class="info-value" id="cookie-value">KANGSESSID=8f7d6c5e4b3a2c1d0e9f8a7b6c5d4e3f; Path=/; HttpOnly</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Session Created:</div>
-                <div class="info-value" id="session-created">2025-03-10 09:23:43</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Session Expires:</div>
-                <div class="info-value" id="session-expires">2025-03-10 10:23:43</div>
+                <div class="info-value" id="cookie-value"></div>
             </div>
         </div>
 
@@ -266,84 +254,6 @@
             <div id="upload-result" style="margin-top: 1rem; display: none;">
                 <h3>Upload Result:</h3>
                 <pre id="upload-result-content"></pre>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Server Configuration</h2>
-            <p>Current server configuration in JSON format:</p>
-            <div class="json-container">
-                <button class="copy-btn" id="copy-json">Copy</button>
-                <pre id="server-config">{
-  "server": {
-    "name": "Kang Web Server",
-    "version": "2.4.1",
-    "hostname": "localhost",
-    "port": 80,
-    "workers": 4,
-    "max_connections": 1000,
-    "keep_alive": true,
-    "keep_alive_timeout": 60,
-    "client_timeout": 300
-  },
-  "paths": {
-    "document_root": "/var/www/html",
-    "error_log": "/var/log/kang/error.log",
-    "access_log": "/var/log/kang/access.log",
-    "temp_dir": "/tmp"
-  },
-  "features": {
-    "ssl": {
-      "enabled": true,
-      "port": 443,
-      "certificate": "/etc/ssl/certs/kang.crt",
-      "key": "/etc/ssl/private/kang.key"
-    },
-    "gzip": {
-      "enabled": true,
-      "comp_level": 6,
-      "min_length": 1000,
-      "types": ["text/html", "text/css", "application/javascript", "application/json"]
-    },
-    "security": {
-      "x_frame_options": "SAMEORIGIN",
-      "x_content_type_options": "nosniff",
-      "x_xss_protection": "1; mode=block",
-      "referrer_policy": "strict-origin-when-cross-origin"
-    }
-  },
-  "mime_types": {
-    "html": "text/html",
-    "css": "text/css",
-    "js": "application/javascript",
-    "json": "application/json",
-    "png": "image/png",
-    "jpg": "image/jpeg",
-    "gif": "image/gif",
-    "svg": "image/svg+xml"
-  }
-}</pre>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Directory Listing</h2>
-            <p>Request a directory listing from the server:</p>
-            <form id="dir-form">
-                <div style="display: flex; gap: 1rem;">
-                    <input type="text" id="dir-path" name="path" placeholder="/var/www/html" style="flex: 1;">
-                    <button type="submit">List Directory</button>
-                </div>
-            </form>
-            <div id="dir-result" style="margin-top: 1rem;">
-                <h3>Directory Contents:</h3>
-                <ul class="dir-list" id="dir-contents">
-                    <li class="folder">📁 <span>public</span></li>
-                    <li class="folder">📁 <span>assets</span></li>
-                    <li class="file">📄 <span>index.html</span></li>
-                    <li class="file">📄 <span>favicon.ico</span></li>
-                    <li class="file">📄 <span>robots.txt</span></li>
-                </ul>
             </div>
         </div>
 
@@ -388,62 +298,25 @@
             }
         });
 
-        // Copy JSON configuration
-        document.getElementById('copy-json').addEventListener('click', function() {
-            const configText = document.getElementById('server-config').textContent;
-            navigator.clipboard.writeText(configText).then(function() {
-                const btn = document.getElementById('copy-json');
-                btn.textContent = 'Copied!';
-                setTimeout(function() {
-                    btn.textContent = 'Copy';
-                }, 2000);
-            });
-        });
-
-        // Directory listing simulation
-        document.getElementById('dir-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const path = document.getElementById('dir-path').value || '/var/www/html';
-            const dirContents = document.getElementById('dir-contents');
-            
-            // Simulate different directory contents based on path
-            let contents = '';
-            if (path.includes('public')) {
-                contents = `
-                    <li class="folder">📁 <span>css</span></li>
-                    <li class="folder">📁 <span>js</span></li>
-                    <li class="folder">📁 <span>images</span></li>
-                    <li class="file">📄 <span>index.html</span></li>
-                `;
-            } else if (path.includes('assets')) {
-                contents = `
-                    <li class="file">📄 <span>main.css</span></li>
-                    <li class="file">📄 <span>app.js</span></li>
-                    <li class="file">📄 <span>logo.png</span></li>
-                    <li class="file">📄 <span>banner.jpg</span></li>
-                `;
-            } else {
-                contents = `
-                    <li class="folder">📁 <span>public</span></li>
-                    <li class="folder">📁 <span>assets</span></li>
-                    <li class="folder">📁 <span>config</span></li>
-                    <li class="file">📄 <span>index.html</span></li>
-                    <li class="file">📄 <span>favicon.ico</span></li>
-                    <li class="file">📄 <span>robots.txt</span></li>
-                    <li class="file">📄 <span>.htaccess</span></li>
-                `;
-            }
-            
-            dirContents.innerHTML = contents;
-        });
-
         // Display actual cookies if available
         function updateCookieInfo() {
-            if (document.cookie) {
-                document.getElementById('cookie-value').textContent = document.cookie;
+            console.log("Checking cookies...");
+            const cookieElement = document.getElementById('cookie-value');
+            
+            // Get all cookies
+            const cookies = document.cookie.split(';').map(cookie => cookie.trim());
+            console.log("All cookies:", cookies);
+            
+            if (cookies.length && cookies[0] !== '') {
+                cookieElement.textContent = cookies.join('\n');
+                console.log("Found cookies:", cookies);
+            } else {
+                cookieElement.textContent = 'No cookies found';
+                console.log("No cookies found");
             }
         }
-        updateCookieInfo();
+
+        document.addEventListener('DOMContentLoaded', updateCookieInfo);
     </script>
 </body>
 </html>

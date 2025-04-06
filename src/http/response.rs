@@ -1,5 +1,7 @@
 use std::fmt::Write;
 
+use chrono::Utc;
+
 use crate::http::Headers;
 
 use super::{cookies::Cookie, status::StatusCode};
@@ -26,6 +28,15 @@ impl Response {
         // Add default headers
         response.headers.add("Server", "Kang");
         response.headers.add("Connection", "close");
+        response.set_cookie(Cookie::new(
+            "KANGSESSID",
+            &uuid::Uuid::new_v4().to_string(),
+            Some(Utc::now() + chrono::Duration::days(1)),
+            Some("/"),
+            None,
+            Some(false),
+            Some(false),
+        ));
 
         response
     }
@@ -92,7 +103,7 @@ impl Response {
 impl From<String> for Response {
     fn from(content: String) -> Self {
         let mut response = Response::new(StatusCode::Ok);
-        
+
         // Split headers and body on double CRLF
         if let Some((headers, body)) = content.split_once("\r\n\r\n") {
             // Parse headers
@@ -107,7 +118,7 @@ impl From<String> for Response {
             response.set_header("Content-Type", "text/html");
             response.set_body_string(&content);
         }
-        
+
         response
     }
 }

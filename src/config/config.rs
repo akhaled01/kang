@@ -20,7 +20,6 @@ pub struct Config {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GlobalConfig {
-    pub error_pages: ErrorPages,
     pub client_max_body_size: Option<String>,
     pub response_format: Option<String>,
     pub cgi: HashMap<String, String>,
@@ -28,16 +27,47 @@ pub struct GlobalConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ErrorPages {
-    pub root: String,
+    pub root: Option<String>,
     #[serde(rename = "404")]
-    pub not_found: String,
+    pub not_found: Option<String>,
     #[serde(rename = "500")]
-    pub server_error: String,
+    pub server_error: Option<String>,
+    #[serde(rename = "403")]
+    pub forbidden: Option<String>,
+    #[serde(rename = "401")]
+    pub unauthorized: Option<String>,
+    #[serde(rename = "400")]
+    pub bad_request: Option<String>,
+    #[serde(rename = "406")]
+    pub not_acceptable: Option<String>,
+    #[serde(rename = "413")]
+    pub request_entity_too_large: Option<String>,
+    #[serde(rename = "415")]
+    pub unsupported_media_type: Option<String>,
+    #[serde(rename = "503")]
+    pub service_unavailable: Option<String>,
+    #[serde(rename = "501")]
+    pub not_implemented: Option<String>,
+    #[serde(rename = "502")]
+    pub bad_gateway: Option<String>,
+    #[serde(rename = "504")]
+    pub gateway_timeout: Option<String>,
+    #[serde(rename = "505")]
+    pub http_version_not_supported: Option<String>,
+    #[serde(rename = "507")]
+    pub insufficient_storage: Option<String>,
+    #[serde(rename = "509")]
+    pub bandwidth_limit_exceeded: Option<String>,
+    #[serde(rename = "510")]
+    pub not_extended: Option<String>,
+    #[serde(rename = "511")]
+    pub network_authentication_required: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerConfig {
     pub server_name: Vec<String>,
+    pub error_pages: ErrorPages,
     pub host: String,
     pub ports: Vec<u16>,
     #[serde(default)]

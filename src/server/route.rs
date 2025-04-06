@@ -11,6 +11,7 @@ use crate::{
     http::{status::StatusCode, Request, Response},
 };
 
+#[derive(Debug)]
 pub struct Route {
     pub path: String,
     pub root: Option<String>,
@@ -23,6 +24,7 @@ pub struct Route {
     pub config: Config,
 }
 
+#[derive(Debug)]
 pub struct Redirect {
     pub url: String,
     pub code: u16,

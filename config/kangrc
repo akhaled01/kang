@@ -1,11 +1,6 @@
 {
   "global": {
     "response_format": "html",
-    "error_pages": {
-      "root": "/etc/kang/error_pages",
-      "404": "404.html",
-      "500": "500.html"
-    },
     "client_max_body_size": "10M",
     "cgi": {
       ".php": "/opt/homebrew/bin/php-cgi"
@@ -16,6 +11,10 @@
       "server_name": [
         "api.example.com"
       ],
+      "error_pages": {
+        "404": "./static/404.html",
+        "500": "./static/500.html"
+      },
       "host": "127.0.0.1",
       "ports": [
         8080,
@@ -49,6 +48,10 @@
         "www.example.com",
         "example.com"
       ],
+      "error_pages": {
+        "404": "./static/404.html",
+        "500": "./static/500.html"
+      },
       "host": "127.0.0.1",
       "ports": [
         9090
@@ -80,15 +83,6 @@
             "GET"
           ],
           "directory_listing": true
-        },
-        {
-          "path": "/files",
-          "root": "/var/www/files",
-          "index": "index.html",
-          "directory_listing": true,
-          "methods": [
-            "GET"
-          ]
         }
       ]
     }
