@@ -5,13 +5,13 @@ use std::path::PathBuf;
 
 use crate::{
     cgi::php::PhpExecContext,
-    config::config::{Config, RouteConfig},
+    config::{Config, RouteConfig},
     http::methods::Method,
     http::upload::UploadHandler,
     http::{status::StatusCode, Request, Response},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Route {
     pub path: String,
     pub root: Option<String>,
@@ -24,20 +24,20 @@ pub struct Route {
     pub config: Config,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Redirect {
     pub url: String,
     pub code: u16,
 }
 
 impl Route {
-    pub fn handle(&self, request: Request) -> Response {
+    pub fn handle(&self, request: Request) -> Result<Response, StatusCode> {
         // Check if method is allowed
         if !self
             .methods
             .contains(&request.method().as_str().to_string())
         {
-            return Response::new(StatusCode::MethodNotAllowed);
+            return Err(StatusCode::MethodNotAllowed);
         }
 
         if let Some(_) = &self.redirect {
@@ -49,39 +49,39 @@ impl Route {
         }
     }
 
-    fn handle_redirect(&self) -> Response {
+    fn handle_redirect(&self) -> Result<Response, StatusCode> {
         let mut response =
             Response::new(StatusCode::from_u16(self.redirect.as_ref().unwrap().code).unwrap());
         response.set_header("Location", &self.redirect.as_ref().unwrap().url);
-        response
+        Ok(response)
     }
 
-    fn handle_cgi(&self, request: Request) -> Response {
+    fn handle_cgi(&self, request: Request) -> Result<Response, StatusCode> {
         let cgi_config = match &self.cgi {
             Some(config) => config,
-            None => return Response::new(StatusCode::InternalServerError),
+            None => return Err(StatusCode::InternalServerError),
         };
 
         // Check if path ends with .php
         if !self.path.ends_with(".php") {
-            return Response::new(StatusCode::NotImplemented);
+            return Err(StatusCode::NotImplemented);
         }
 
         // Get PHP handler
         let php_handler = match cgi_config.get(".php") {
             Some(handler) => handler,
-            None => return Response::new(StatusCode::NotImplemented),
+            None => return Err(StatusCode::NotImplemented),
         };
 
         // Get script path
         let script_path = match &self.root {
             Some(root) => format!("{}{}", root, self.path),
-            None => return Response::new(StatusCode::InternalServerError),
+            None => return Err(StatusCode::InternalServerError),
         };
 
         // Check if script exists
         if !Path::new(&script_path).exists() {
-            return Response::new(StatusCode::NotFound);
+            return Err(StatusCode::NotFound);
         }
 
         // Create PHP execution context
@@ -95,13 +95,13 @@ impl Route {
                 let mut response = Response::new(StatusCode::Ok);
                 response.set_header("Content-Type", "text/html");
                 response.set_body(output.as_bytes().to_vec());
-                response
+                Ok(response)
             }
-            Err(_) => Response::new(StatusCode::InternalServerError),
+            Err(_) => Err(StatusCode::InternalServerError),
         }
     }
 
-    fn handle_static(&self, request: Request) -> Response {
+    fn handle_static(&self, request: Request) -> Result<Response, StatusCode> {
         // Check if path ends with .php for CGI handling
         if request.path().ends_with(".php") {
             // Get global CGI config
@@ -110,20 +110,20 @@ impl Route {
             // Get PHP handler from global config
             let php_handler = match cgi_config.get(".php") {
                 Some(handler) => handler,
-                None => return Response::new(StatusCode::NotImplemented),
+                None => return Err(StatusCode::NotImplemented),
             };
 
             // Get script path
             let base_path = match &self.root {
                 Some(root) => root,
-                None => return Response::new(StatusCode::InternalServerError),
+                None => return Err(StatusCode::InternalServerError),
             };
 
             let script_path = format!("{}{}", base_path, request.path());
 
             // Check if script exists
             if !Path::new(&script_path).exists() {
-                return Response::new(StatusCode::NotFound);
+                return Err(StatusCode::NotFound);
             }
 
             // Create PHP execution context
@@ -132,26 +132,26 @@ impl Route {
 
             // Execute PHP script
             match php_ctx.exec() {
-                Ok(output) => return Response::from(output),
-                Err(_) => return Response::new(StatusCode::InternalServerError),
+                Ok(output) => return Ok(Response::from(output)),
+                Err(_) => return Err(StatusCode::InternalServerError),
             }
         }
 
         // Handle file upload for POST requests
         if request.method() == &Method::POST {
             if !request.has_file_upload() {
-                return Response::new(StatusCode::BadRequest);
+                return Err(StatusCode::BadRequest);
             }
 
             let base_path = match &self.root {
                 Some(root) => root,
-                None => return Response::new(StatusCode::InternalServerError),
+                None => return Err(StatusCode::InternalServerError),
             };
 
             // Parse multipart form data
             let multipart_data = match request.parse_multipart_form_data() {
                 Ok(data) => data,
-                Err(_) => return Response::new(StatusCode::BadRequest),
+                Err(_) => return Err(StatusCode::BadRequest),
             };
 
             // Create upload handler with client_max_body_size if specified
@@ -164,15 +164,15 @@ impl Route {
                     let mut response = Response::new(StatusCode::Ok);
                     let body = format!("Successfully uploaded {} files", files.len());
                     response.set_body(body.into_bytes());
-                    response
+                    Ok(response)
                 }
-                Err(_) => Response::new(StatusCode::InternalServerError),
+                Err(_) => Err(StatusCode::InternalServerError),
             }
         } else {
             // Handle GET requests - serve static files
             let base_path = match &self.root {
                 Some(root) => root,
-                None => return Response::new(StatusCode::InternalServerError),
+                None => return Err(StatusCode::InternalServerError),
             };
 
             // Get the relative path by removing the route path prefix
@@ -186,7 +186,7 @@ impl Route {
 
             // Check if path exists
             if !path.exists() {
-                return Response::new(StatusCode::NotFound);
+                return Err(StatusCode::NotFound);
             }
 
             // Handle directory
@@ -195,20 +195,20 @@ impl Route {
                 if let Some(index) = &self.index {
                     let index_path = path.join(index);
                     if index_path.exists() {
-                        return FileServer::serve_file(index_path);
+                        return Ok(FileServer::serve_file(index_path));
                     }
                 }
 
                 // Show directory listing if enabled
                 if self.directory_listing {
-                    return FileServer::serve_directory_listing(&path, &self.path, &self.config);
+                    return Ok(FileServer::serve_directory_listing(&path, &self.path, &self.config));
                 }
 
-                return Response::new(StatusCode::NotFound);
+                return Err(StatusCode::NotFound);
             }
 
             // Serve the file
-            FileServer::serve_file(path)
+            Ok(FileServer::serve_file(path))
         }
     }
 }

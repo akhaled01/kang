@@ -8,14 +8,16 @@ use std::net::{TcpListener, TcpStream};
 use std::os::unix::io::{AsRawFd, RawFd};
 
 #[cfg(target_os = "linux")]
+use crate::error;
+#[cfg(target_os = "linux")]
 use crate::http::Request;
 #[cfg(target_os = "linux")]
 use crate::info;
-#[cfg(target_os = "linux")]
-use crate::error;
 
 #[cfg(target_os = "linux")]
-use libc::{EPOLLIN, EPOLLOUT, EPOLLET, EPOLL_CTL_ADD, EPOLL_CTL_DEL, epoll_event, epoll_create1, epoll_ctl};
+use libc::{
+    epoll_create1, epoll_ctl, epoll_event, EPOLLET, EPOLLIN, EPOLLOUT, EPOLL_CTL_ADD, EPOLL_CTL_DEL,
+};
 
 #[cfg(target_os = "linux")]
 /// TCP listening socket using the epoll interface.
@@ -108,7 +110,7 @@ impl EpollListener {
                 Err(e) => {
                     error!("Accept error: {}", e);
                     return Err(e);
-                },
+                }
             }
         }
         Ok(())
@@ -184,8 +186,14 @@ impl EpollListener {
     }
 
     pub fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()> {
-        if unsafe { libc::epoll_ctl(global_epoll_fd, libc::EPOLL_CTL_DEL, fd, std::ptr::null_mut()) }
-            < 0
+        if unsafe {
+            libc::epoll_ctl(
+                global_epoll_fd,
+                libc::EPOLL_CTL_DEL,
+                fd,
+                std::ptr::null_mut(),
+            )
+        } < 0
         {
             return Err(io::Error::last_os_error());
         }

@@ -1,9 +1,9 @@
-use super::listener::{Listener, MAX_EVENTS};
-use crate::config::config::{Config, ErrorPages, ServerConfig};
-use crate::http::status::StatusCode;
-use crate::http::Response;
-use crate::server::route::Route;
-use crate::{error, info, warn};
+use crate::{
+    config::{Config, ErrorPages, ServerConfig},
+    error, info, warn,
+    server::{Listener, Mux, MAX_EVENTS},
+};
+
 use std::os::fd::RawFd;
 use std::{collections::HashMap, io};
 
@@ -21,24 +21,22 @@ pub struct Server {
     pub host: String,
     pub ports: Vec<u16>,
     pub is_default: bool,
-    pub routes: Vec<Route>,
+    pub mux: Mux,
     pub client_max_body_size: Option<String>,
     pub error_pages: ErrorPages,
 }
 
 impl Server {
     pub fn new(server_config: ServerConfig, config: Config) -> Self {
+        // Clone server_config before using it to avoid partial move issues
+        let server_config_clone = server_config.clone();
         Self {
             listeners: HashMap::new(),
             server_name: server_config.server_name,
             host: server_config.host,
             ports: server_config.ports,
             is_default: server_config.is_default,
-            routes: server_config
-                .routes
-                .into_iter()
-                .map(|r| Route::from((r, config.clone())))
-                .collect(),
+            mux: Mux::new(server_config_clone, config),
             client_max_body_size: server_config.client_max_body_size,
             error_pages: server_config.error_pages,
         }
@@ -195,50 +193,18 @@ impl Server {
                             match listener.handle_connection(fd) {
                                 Ok(req) => {
                                     info!("Parsed HTTP Request: {:?}", req);
-                                    // Find matching route by checking path prefixes
-                                    let route = self
-                                        .routes
-                                        .iter()
-                                        .filter(|r| req.path().starts_with(&r.path))
-                                        .max_by_key(|r| r.path.len());
-
-                                    if let None = route {
-                                        let mut res = Response::new(StatusCode::NotFound);
-                                        res.set_body_string(
-                                            &self
-                                                .error_pages
-                                                .not_found
-                                                .clone()
-                                                .unwrap_or("404 Not Found".to_string()),
-                                        );
-                                        match listener.send_bytes(res.to_bytes(), fd) {
-                                            Ok(_) => {
-                                                handled = true;
-                                                let _ = listener.remove_connection(fd, global_fd);
-                                                break;
-                                            }
-                                            Err(e) => {
-                                                error!("Failed to send response: {}", e);
-                                                handled = true;
-                                                let _ = listener.remove_connection(fd, global_fd);
-                                                break;
-                                            }
+                                    let res = self.mux.handle(req);
+                                    match listener.send_bytes(res.to_bytes(), fd) {
+                                        Ok(_) => {
+                                            handled = true;
+                                            let _ = listener.remove_connection(fd, global_fd);
+                                            break;
                                         }
-                                    } else {
-                                        // Process request and send response
-                                        let response = route.as_ref().unwrap().handle(req);
-                                        match listener.send_bytes(response.to_bytes(), fd) {
-                                            Ok(_) => {
-                                                handled = true;
-                                                let _ = listener.remove_connection(fd, global_fd);
-                                                break;
-                                            }
-                                            Err(e) => {
-                                                error!("Failed to send response: {}", e);
-                                                handled = true;
-                                                let _ = listener.remove_connection(fd, global_fd);
-                                                break;
-                                            }
+                                        Err(e) => {
+                                            error!("Failed to send response: {}", e);
+                                            handled = true;
+                                            let _ = listener.remove_connection(fd, global_fd);
+                                            break;
                                         }
                                     }
                                 }

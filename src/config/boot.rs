@@ -3,7 +3,7 @@ use std::{net::TcpListener, thread};
 use super::config::Config;
 use crate::{error, warn};
 #[cfg(target_os = "macos")]
-use crate::server::KqueueListener;
+use crate::server::listener::KqueueListener;
 #[cfg(target_os = "linux")]
 use crate::server::EpollListener;
 

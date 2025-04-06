@@ -5,7 +5,6 @@ use crate::http::Request;
 #[cfg(target_os = "linux")]
 use crate::server::epoll::EpollListener;
 
-
 pub const MAX_EVENTS: usize = 1024;
 
 /// Trait for a listener. A listener is a TCP listener that handles connections using I/O Multiplexing

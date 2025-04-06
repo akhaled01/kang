@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
 use thiserror::Error;
 
-use crate::server::Server;
+use crate::server::server::Server;
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -25,43 +25,10 @@ pub struct GlobalConfig {
     pub cgi: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ErrorPages {
-    pub root: Option<String>,
-    #[serde(rename = "404")]
-    pub not_found: Option<String>,
-    #[serde(rename = "500")]
-    pub server_error: Option<String>,
-    #[serde(rename = "403")]
-    pub forbidden: Option<String>,
-    #[serde(rename = "401")]
-    pub unauthorized: Option<String>,
-    #[serde(rename = "400")]
-    pub bad_request: Option<String>,
-    #[serde(rename = "406")]
-    pub not_acceptable: Option<String>,
-    #[serde(rename = "413")]
-    pub request_entity_too_large: Option<String>,
-    #[serde(rename = "415")]
-    pub unsupported_media_type: Option<String>,
-    #[serde(rename = "503")]
-    pub service_unavailable: Option<String>,
-    #[serde(rename = "501")]
-    pub not_implemented: Option<String>,
-    #[serde(rename = "502")]
-    pub bad_gateway: Option<String>,
-    #[serde(rename = "504")]
-    pub gateway_timeout: Option<String>,
-    #[serde(rename = "505")]
-    pub http_version_not_supported: Option<String>,
-    #[serde(rename = "507")]
-    pub insufficient_storage: Option<String>,
-    #[serde(rename = "509")]
-    pub bandwidth_limit_exceeded: Option<String>,
-    #[serde(rename = "510")]
-    pub not_extended: Option<String>,
-    #[serde(rename = "511")]
-    pub network_authentication_required: Option<String>,
+    #[serde(flatten)]
+    pub pages: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
