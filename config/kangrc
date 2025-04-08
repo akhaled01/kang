@@ -62,7 +62,8 @@
           "root": "./static/",
           "index": "index.html",
           "methods": [
-            "GET"
+            "GET",
+            "POST"
           ]
         },
         {
