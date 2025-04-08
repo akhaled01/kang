@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Method {
     GET,
@@ -35,5 +37,11 @@ impl Method {
             "OPTIONS" => Method::OPTIONS,
             _ => Method::UNKNOWN(s.to_string()),
         }
+    }
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }

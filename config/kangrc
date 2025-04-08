@@ -80,7 +80,9 @@
           "root": "./static/docs",
           "index": "index.html",
           "methods": [
-            "GET"
+            "GET",
+            "POST",
+            "DELETE"
           ],
           "directory_listing": true
         }

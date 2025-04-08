@@ -192,7 +192,8 @@ impl Server {
                         if has_read_event {
                             match listener.handle_connection(fd) {
                                 Ok(req) => {
-                                    info!("Parsed HTTP Request: {:?}", req);
+                                    info!("Parsed HTTP Request:
+{:#?}", req);
                                     let res = self.mux.handle(req);
                                     match listener.send_bytes(res.to_bytes(), fd) {
                                         Ok(_) => {

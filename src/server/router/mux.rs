@@ -1,6 +1,7 @@
 use super::route::Route;
 use crate::config::{Config, ServerConfig};
 use crate::http::{Request, Response, StatusCode};
+use crate::info;
 
 #[derive(Debug, Clone)]
 /// A mux is an HTTP multiplexer that routes incoming requests to the appropriate handler.
@@ -46,19 +47,26 @@ impl Mux {
     /// Validates the request by checking if the request matches a route and if the method is allowed.
     /// Returns the route if the request is valid, otherwise returns a status code.
     fn validate_request(&self, request: &Request) -> Result<Route, StatusCode> {
+        info!("Validating request: {} {}", request.method(), request.path());
+        let mut path_matched = false;
+        
         for route in &self.routes {
             if request.path().starts_with(&route.path) {
-                if route
-                    .methods
-                    .contains(&request.method().as_str().to_string())
-                {
+                path_matched = true;
+                if route.methods.contains(&request.method().as_str().to_string()) {
+                    info!("Request matched route: {} {}", request.method(), route.path);
                     return Ok(route.clone());
                 }
-
-                return Err(StatusCode::MethodNotAllowed);
             }
         }
-        Err(StatusCode::NotFound)
+        
+        // If we found a matching path but no matching method, return MethodNotAllowed
+        // Otherwise return NotFound
+        if path_matched {
+            Err(StatusCode::MethodNotAllowed)
+        } else {
+            Err(StatusCode::NotFound)
+        }
     }
 
     /// Handles an incoming HTTP request by routing it to the appropriate handler.

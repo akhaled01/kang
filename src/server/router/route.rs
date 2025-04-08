@@ -1,5 +1,7 @@
+use crate::error;
 use crate::http::files::FileServer;
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -167,6 +169,38 @@ impl Route {
                     Ok(response)
                 }
                 Err(_) => Err(StatusCode::InternalServerError),
+            }
+        } else if request.method() == &Method::DELETE {
+            let base_path = match &self.root {
+                Some(root) => root,
+                None => return Err(StatusCode::InternalServerError),
+            };
+
+            // Get the relative path by removing the route path prefix
+            let relative_path = request
+                .path()
+                .strip_prefix(&self.path)
+                .unwrap_or(request.path());
+
+            // Construct full path by joining base_path with the relative path
+            let path = PathBuf::from(base_path).join(relative_path.trim_start_matches('/'));
+
+            // Check if path exists
+            if !path.exists() {
+                return Err(StatusCode::NotFound);
+            }
+
+            // Delete the file
+            match fs::remove_file(&path) {
+                Ok(_) => {
+                    let mut response = Response::new(StatusCode::Ok);
+                    response.set_body("File deleted successfully".as_bytes().to_vec());
+                    Ok(response)
+                }
+                Err(e) => {
+                    error!("Failed to delete file: {}", e);
+                    Err(StatusCode::InternalServerError)
+                }
             }
         } else {
             // Handle GET requests - serve static files
