@@ -1,16 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
-use thiserror::Error;
 
-use crate::server::server::Server;
-
-#[derive(Debug, Error)]
-pub enum ConfigError {
-    #[error("Failed to read config file: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Failed to parse config file: {0}")]
-    ParseError(#[from] serde_json::Error),
-}
+use super::{errors::ConfigError, validator::ConfigValidator};
+use crate::server::Server;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -67,6 +59,11 @@ impl Config {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_json::from_str(&contents)?;
+
+        if let Err(e) = ConfigValidator::validate(&config) {
+            return Err(ConfigError::ValidationError(e));
+        }
+
         Ok(config)
     }
 

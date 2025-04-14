@@ -242,7 +242,7 @@
         <div class="card">
             <h2>File Upload Test</h2>
             <p>Use this form to test file uploads on this server:</p>
-            <form id="upload-form">
+            <form id="upload-form" enctype="multipart/form-data">
                 <div>
                     <label for="file-upload">Select file to upload:</label>
                     <input type="file" id="file-upload" name="file">
@@ -271,30 +271,42 @@
         }
         updateServerTime();
 
-        // File upload simulation
-        document.getElementById('upload-form').addEventListener('submit', function(e) {
+        // File upload handling
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const fileInput = document.getElementById('file-upload');
             const resultDiv = document.getElementById('upload-result');
             const resultContent = document.getElementById('upload-result-content');
             
             if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                resultDiv.style.display = 'block';
-                resultContent.textContent = JSON.stringify({
-                    success: true,
-                    filename: file.name,
-                    size: file.size + " bytes",
-                    type: file.type,
-                    uploaded_to: "/var/www/uploads/" + file.name,
-                    timestamp: new Date().toISOString()
-                }, null, 2);
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                try {
+                    const response = await fetch('/', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.text();
+                    resultDiv.style.display = 'block';
+                    
+                    if (response.ok) {
+                        resultContent.textContent = `Upload successful!\n${result}`;
+                        resultContent.style.color = '#00b8d4';
+                    } else {
+                        resultContent.textContent = `Upload failed: ${response.status} ${response.statusText}\n${result}`;
+                        resultContent.style.color = '#ff1744';
+                    }
+                } catch (error) {
+                    resultDiv.style.display = 'block';
+                    resultContent.textContent = `Error: ${error.message}`;
+                    resultContent.style.color = '#ff1744';
+                }
             } else {
                 resultDiv.style.display = 'block';
-                resultContent.textContent = JSON.stringify({
-                    success: false,
-                    error: "No file selected"
-                }, null, 2);
+                resultContent.textContent = 'Please select a file first';
+                resultContent.style.color = '#ff1744';
             }
         });
 

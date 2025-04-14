@@ -1,7 +1,8 @@
 use crate::{
     config::{Config, ErrorPages, ServerConfig},
-    error, info, warn,
+    error, info,
     server::{Listener, Mux, MAX_EVENTS},
+    warn,
 };
 
 use std::os::fd::RawFd;
@@ -27,7 +28,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(server_config: ServerConfig, config: Config) -> Self {
+    pub fn new(server_config: ServerConfig, config: Config) -> Server {
         // Clone server_config before using it to avoid partial move issues
         let server_config_clone = server_config.clone();
         Self {
@@ -192,8 +193,11 @@ impl Server {
                         if has_read_event {
                             match listener.handle_connection(fd) {
                                 Ok(req) => {
-                                    info!("Parsed HTTP Request:
-{:#?}", req);
+                                    info!(
+                                        "Parsed HTTP Request:
+{:#?}",
+                                        req
+                                    );
                                     let res = self.mux.handle(req);
                                     match listener.send_bytes(res.to_bytes(), fd) {
                                         Ok(_) => {

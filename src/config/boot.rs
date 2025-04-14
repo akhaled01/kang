@@ -17,12 +17,28 @@ impl KangStarter {
     }
 
     pub fn boot_servers(config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let config = Config::from_file(config_path)?;
-        let mut servers = config.create_servers();
+        let config = match Config::from_file(config_path) {
+            Ok(config) => config,
+            Err(e) => {
+                error!("Failed to load config from {}: {}", config_path, e);
+                return Err(e.into());
+            }
+        };
+
+        let servers = config.create_servers();
+        if servers.is_empty() {
+            error!("No valid servers found in configuration");
+            return Err("No valid servers found".into());
+        }
+
+        let mut handles = Vec::new();
+        let mut any_server_started = false;
 
         // Create listeners for each server's ports
-        for server in &mut servers {
-            for &original_port in &server.ports.clone() {
+        for mut server in servers {
+            let mut server_started = false;
+
+            'port_loop: for &original_port in &server.ports.clone() {
                 let mut current_port = original_port;
                 let max_attempts = 100; // Try up to 100 ports
 
@@ -46,33 +62,49 @@ impl KangStarter {
                             if current_port != original_port {
                                 warn!("Port {original_port} was in use, using port {current_port} instead");
                             }
-                            server.add_listener(listener)?;
-                            break;
+                            match server.add_listener(listener) {
+                                Ok(_) => {
+                                    server_started = true;
+                                    break 'port_loop;
+                                }
+                                Err(e) => {
+                                    error!("Failed to add listener on port {}: {}", current_port, e);
+                                    continue;
+                                }
+                            }
                         }
-                        Err(_) if attempt < max_attempts - 1 => {
+                        Err(e) if attempt == max_attempts - 1 => {
+                            error!("Failed to bind to any port for server {}: {}", server.host, e);
+                        }
+                        Err(_) => {
                             current_port += 1;
                             continue;
                         }
-                        Err(e) => return Err(e.into()),
                     }
                 }
             }
+
+            if server_started {
+                any_server_started = true;
+                let handle = thread::spawn(move || {
+                    if let Err(e) = server.listen_and_serve() {
+                        error!("Server error: {}", e);
+                    }
+                });
+                handles.push(handle);
+            }
         }
 
-        let mut handles = Vec::new();
-
-        for mut server in servers {
-            let handle = thread::spawn(move || {
-                if let Err(e) = server.listen_and_serve() {
-                    error!("Server error: {}", e);
-                }
-            });
-            handles.push(handle);
+        if !any_server_started {
+            error!("Failed to start any servers");
+            return Err("No servers could be started".into());
         }
 
         // Wait for all server threads to complete
         for handle in handles {
-            handle.join().unwrap();
+            if let Err(e) = handle.join() {
+                error!("Server thread panicked: {:?}", e);
+            }
         }
 
         Ok(())

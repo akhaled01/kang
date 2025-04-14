@@ -153,10 +153,11 @@ impl Request {
             let headers = Headers::parse(&lines[1..]);
             request.set_headers(headers.clone());
             // Check transfer encoding and connection headers
-            request.chunked = headers.get("Transfer-Encoding")
+            request.chunked = headers
+                .get("Transfer-Encoding")
                 .map(|v| v.to_lowercase().contains("chunked"))
                 .unwrap_or(false);
-            
+
             request.keep_alive = match headers.get("Connection") {
                 Some(conn) => conn.to_lowercase().contains("keep-alive"),
                 None => request.version.contains("1.1"), // HTTP/1.1 defaults to keep-alive
@@ -187,7 +188,9 @@ impl Request {
 
     // Method to check if request contains a file upload
     pub fn has_file_upload(&self) -> bool {
-        matches!(self.method, Method::POST) && self.headers.is_multipart_form_data()
+        matches!(self.method, Method::POST)
+            && self.headers.is_multipart_form_data()
+            && self.body.len() > 0
     }
 
     // Parse the multipart form data for file uploads
