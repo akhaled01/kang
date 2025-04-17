@@ -45,7 +45,8 @@ impl UploadHandler {
                 ));
             }
             // Generate file path
-            let file_path = format!("{}/{}", self.upload_dir, file.filename);
+            //let file_path = format!("{}/{}", self.upload_dir, file.filename);
+            let file_path = format!("{}/uploads/{}", self.upload_dir, file.filename);
             // Save file
             self.save_file(&file_path, &file.content)?;
             saved_files.push(file.filename.clone());

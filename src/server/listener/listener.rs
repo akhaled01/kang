@@ -3,7 +3,7 @@ use std::{io, os::fd::RawFd};
 use crate::http::Request;
 
 #[cfg(target_os = "linux")]
-use crate::server::epoll::EpollListener;
+use crate::server::listener::epoll::EpollListener;
 
 pub const MAX_EVENTS: usize = 1024;
 

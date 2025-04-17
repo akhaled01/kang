@@ -242,7 +242,7 @@
         <div class="card">
             <h2>File Upload Test</h2>
             <p>Use this form to test file uploads on this server:</p>
-            <form id="upload-form" enctype="multipart/form-data">
+            <form id="upload-form" enctype="multipart/form-data" onsubmit="return false;">
                 <div>
                     <label for="file-upload">Select file to upload:</label>
                     <input type="file" id="file-upload" name="file">
@@ -308,6 +308,9 @@
                 resultContent.textContent = 'Please select a file first';
                 resultContent.style.color = '#ff1744';
             }
+
+            // Reset the file input
+            fileInput.value = '';
         });
 
         // Display actual cookies if available
