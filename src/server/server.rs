@@ -1,8 +1,5 @@
 use crate::{
-    config::{Config, ErrorPages, ServerConfig},
-    error, info,
-    server::{Listener, Mux, MAX_EVENTS},
-    warn,
+    config::{Config, ErrorPages, ServerConfig}, error, http::SessionStore, info, server::{Listener, Mux, MAX_EVENTS}, warn
 };
 
 use std::os::fd::RawFd;
@@ -25,12 +22,23 @@ pub struct Server {
     pub mux: Mux,
     pub client_max_body_size: Option<String>,
     pub error_pages: ErrorPages,
+    pub session_store: Option<SessionStore>,
 }
 
 impl Server {
     pub fn new(server_config: ServerConfig, config: Config) -> Server {
         // Clone server_config before using it to avoid partial move issues
         let server_config_clone = server_config.clone();
+
+        // Initialize session store if sessions are enabled
+        let session_store = if server_config.sessions.enabled {
+            Some(SessionStore::new(server_config.sessions.timeout_minutes))
+        } else if config.global.sessions.enabled {
+            Some(SessionStore::new(config.global.sessions.timeout_minutes))
+        } else {
+            None
+        };
+
         Self {
             listeners: HashMap::new(),
             server_name: server_config.server_name,
@@ -40,6 +48,7 @@ impl Server {
             mux: Mux::new(server_config_clone, config),
             client_max_body_size: server_config.client_max_body_size,
             error_pages: server_config.error_pages,
+            session_store,
         }
     }
 

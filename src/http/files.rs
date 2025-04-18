@@ -23,6 +23,13 @@ impl FileServer {
                         "png" => "image/png",
                         "jpg" | "jpeg" => "image/jpeg",
                         "gif" => "image/gif",
+                        "svg" => "image/svg+xml",
+                        "webp" => "image/webp",
+                        "ico" => "image/x-icon",
+                        "pdf" => "application/pdf",
+                        "json" => "application/json",
+                        "xml" => "application/xml",
+                        "txt" => "text/plain",
                         _ => "application/octet-stream",
                     };
                     response.set_header("Content-Type", content_type);

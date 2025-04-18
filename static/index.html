@@ -254,6 +254,10 @@
             <div id="upload-result" style="margin-top: 1rem; display: none;">
                 <h3>Upload Result:</h3>
                 <pre id="upload-result-content"></pre>
+                <div id="image-preview" style="margin-top: 1rem; display: none;">
+                    <h4>Preview:</h4>
+                    <img id="preview-image" style="max-width: 300px; max-height: 300px;">
+                </div>
             </div>
         </div>
 
@@ -294,6 +298,14 @@
                     if (response.ok) {
                         resultContent.textContent = `Upload successful!\n${result}`;
                         resultContent.style.color = '#00b8d4';
+
+                        // If it's an image, show preview
+                        if (fileInput.files[0].type.startsWith('image/')) {
+                            const imgPreview = document.getElementById('image-preview');
+                            const previewImg = document.getElementById('preview-image');
+                            imgPreview.style.display = 'block';
+                            previewImg.src = `/uploads/${fileInput.files[0].name}`;
+                        }
                     } else {
                         resultContent.textContent = `Upload failed: ${response.status} ${response.statusText}\n${result}`;
                         resultContent.style.color = '#ff1744';

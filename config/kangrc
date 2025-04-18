@@ -4,6 +4,13 @@
     "client_max_body_size": "10M",
     "cgi": {
       ".php": "/opt/homebrew/bin/php-cgi"
+    },
+    "sessions": {
+      "enabled": true,
+      "timeout_minutes": 60,
+      "cookie_path": "/",
+      "cookie_secure": false,
+      "cookie_http_only": true
     }
   },
   "servers": [
@@ -21,6 +28,9 @@
         8443
       ],
       "is_default": true,
+      "sessions": {
+        "enabled": true
+      },
       "routes": [
         {
           "path": "/",
@@ -33,14 +43,32 @@
           "directory_listing": false
         },
         {
+          "path": "/profile",
+          "root": "./static/profile/",
+          "index": "profile.html",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "sessions_required": true
+        },
+        {
           "path": "/uploads",
-          "root": "/var/www/uploads",
-          "upload_dir": "./static/uploads",
+          "root": "./static/",
           "methods": [
             "POST",
             "PUT"
           ],
+          "upload_dir": "./static/uploads",
           "client_max_body_size": "100M"
+        },
+        {
+          "path": "/uploads/",
+          "root": "./static/uploads/",
+          "methods": [
+            "GET"
+          ],
+          "directory_listing": true
         }
       ]
     },
@@ -68,6 +96,16 @@
           ]
         },
         {
+          "path": "/profile",
+          "root": "./static/profile/",
+          "index": "profile.html",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "sessions_required": true
+        },
+        {
           "path": "/old-docs",
           "methods": [
             "GET"
@@ -85,6 +123,25 @@
             "GET",
             "POST",
             "DELETE"
+          ],
+          "directory_listing": true
+        },
+        {
+          "path": "/uploads",
+          "root": "./static/",
+          "methods": [
+            "POST",
+            "PUT"
+          ],
+          "upload_dir": "./static/uploads",
+          "client_max_body_size": "100M"
+        },
+        {
+          "path": "/uploads/",
+          "root": "./static/uploads/",
+
+          "methods": [
+            "GET"
           ],
           "directory_listing": true
         }

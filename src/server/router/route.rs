@@ -163,9 +163,15 @@ impl Route {
             // Handle the upload
             match upload_handler.handle_upload(&multipart_data) {
                 Ok(files) => {
+                    // let mut response = Response::new(StatusCode::Ok);
+                    // let body = format!("Successfully uploaded {} files", files.len());
+                    // response.set_body(body.into_bytes());
+                    // Ok(response)
                     let mut response = Response::new(StatusCode::Ok);
-                    let body = format!("Successfully uploaded {} files", files.len());
-                    response.set_body(body.into_bytes());
+                    response.set_header("Content-Type", "application/json");
+                    let json_response = format!("{{\"success\":true,\"files\":{:?},\"message\":\"Successfully uploaded {} files\"}}", 
+                                                files, files.len());
+                    response.set_body(json_response.into_bytes());
                     Ok(response)
                 }
                 Err(_) => Err(StatusCode::InternalServerError),

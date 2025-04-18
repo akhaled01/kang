@@ -35,7 +35,29 @@ impl UploadHandler {
     }
 
     pub fn handle_upload(&self, multipart_data: &MultipartFormData) -> io::Result<Vec<String>> {
+        // let mut saved_files = Vec::new();
+        // for file in &multipart_data.files {
+        //     // Check file size against max body size
+        //     if file.content.len() as u64 > self.max_body_size {
+        //         return Err(io::Error::new(
+        //             io::ErrorKind::InvalidData,
+        //             format!("File '{}' exceeds maximum allowed size", file.filename),
+        //         ));
+        //     }
+        //     // Generate file path
+        //     //let file_path = format!("{}/{}", self.upload_dir, file.filename);
+        //     let file_path = format!("{}uploads/{}", self.upload_dir, file.filename);
+        //     // Save file
+        //     self.save_file(&file_path, &file.content)?;
+        //     saved_files.push(file.filename.clone());
+        //     info!("File uploaded successfully: {}", file.filename);
+        // }
+        // Ok(saved_files)
         let mut saved_files = Vec::new();
+        // First ensure uploads directory exists
+        let uploads_dir = format!("{}uploads", self.upload_dir);
+        fs::create_dir_all(&uploads_dir)?;
+
         for file in &multipart_data.files {
             // Check file size against max body size
             if file.content.len() as u64 > self.max_body_size {
@@ -44,9 +66,9 @@ impl UploadHandler {
                     format!("File '{}' exceeds maximum allowed size", file.filename),
                 ));
             }
+
             // Generate file path
-            //let file_path = format!("{}/{}", self.upload_dir, file.filename);
-            let file_path = format!("{}/uploads/{}", self.upload_dir, file.filename);
+            let file_path = format!("{}uploads/{}", self.upload_dir, file.filename);
             // Save file
             self.save_file(&file_path, &file.content)?;
             saved_files.push(file.filename.clone());
@@ -56,14 +78,38 @@ impl UploadHandler {
     }
 
     fn save_file(&self, path: &str, content: &[u8]) -> io::Result<()> {
+        // // Ensure the upload directory exists
+        // if let Some(parent) = Path::new(path).parent() {
+        //     debug!("Creating directory: {:?}", parent);
+        //     fs::create_dir_all(parent)?;
+        // }
+        // debug!("Writing file to: {}", path);
+        // let mut file = File::create(path)?;
+        // file.write_all(content)?;
+        // Ok(())
         // Ensure the upload directory exists
         if let Some(parent) = Path::new(path).parent() {
             debug!("Creating directory: {:?}", parent);
             fs::create_dir_all(parent)?;
         }
-        debug!("Writing file to: {}", path);
+        debug!("Writing file to: {} ({} bytes)", path, content.len());
+
+        // Create file with explicit options to ensure binary safety
         let mut file = File::create(path)?;
+        // Write all content in one operation
         file.write_all(content)?;
+        // Ensure data is flushed to disk
+        file.flush()?;
+        // Verify file was written correctly
+        let metadata = fs::metadata(path)?;
+        if metadata.len() != content.len() as u64 {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("File size mismatch: expected {} bytes, got {} bytes", 
+                        content.len(), metadata.len())
+            ));
+        }
+        info!("File saved: {} (size: {} bytes)", path, metadata.len());
         Ok(())
     }
 }
@@ -136,6 +182,13 @@ impl MultipartFormData {
                         let headers_text =
                             String::from_utf8_lossy(&body[content_start..header_end]);
                         let content_start = header_end + 4;
+                        // let content_end = if end >= 2 && &body[end - 2..end] == b"\r\n" {
+                        //     end - 2
+                        // } else {
+                        //     end
+                        // };
+
+                        // More precise content end calculation
                         let content_end = if end >= 2 && &body[end - 2..end] == b"\r\n" {
                             end - 2
                         } else {
@@ -145,13 +198,34 @@ impl MultipartFormData {
                         if content_end > content_start {
                             let content = &body[content_start..content_end];
                             // Rest of the processing remains the same
+                            // let field_name = Self::extract_field_name(&headers_text);
+                            // let filename = Self::extract_filename(&headers_text);
+                            // let content_type = Self::extract_content_type(&headers_text)
+                            //     .unwrap_or_else(|| "text/plain".to_string());
                             let field_name = Self::extract_field_name(&headers_text);
                             let filename = Self::extract_filename(&headers_text);
                             let content_type = Self::extract_content_type(&headers_text)
-                                .unwrap_or_else(|| "text/plain".to_string());
+                                .unwrap_or_else(|| "application/octet-stream".to_string());
+                            // if let Some(name) = field_name {
+                            //     if let Some(filename) = filename {
+                            //         // This is a file (binary safe)
+                            //         files.push(UploadedFile {
+                            //             name: name.to_string(),
+                            //             filename: filename.to_string(),
+                            //             content_type,
+                            //             content: content.to_vec(),
+                            //         });
+                            //     } else {
+                            //         // This is a regular text field
+                            //         let field_value = String::from_utf8_lossy(content).to_string();
+                            //         fields.insert(name.to_string(), field_value);
+                            //     }
+                            // }
                             if let Some(name) = field_name {
                                 if let Some(filename) = filename {
                                     // This is a file (binary safe)
+                                    debug!("Found file: {} ({}, {} bytes)", 
+                                           filename, content_type, content.len());
                                     files.push(UploadedFile {
                                         name: name.to_string(),
                                         filename: filename.to_string(),
@@ -169,6 +243,14 @@ impl MultipartFormData {
                 }
             }
         }
+
+        if files.is_empty() && fields.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Failed to parse any fields or files from multipart data",
+            ));
+        }
+
         Ok(MultipartFormData { fields, files })
     }
 

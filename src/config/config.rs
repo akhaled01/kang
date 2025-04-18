@@ -4,6 +4,26 @@ use std::{collections::HashMap, fs, path::Path};
 use super::{errors::ConfigError, validator::ConfigValidator};
 use crate::server::Server;
 
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+pub struct SessionConfig {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout_minutes: i64,
+    #[serde(default = "default_cookie_path")]
+    pub cookie_path: String,
+    #[serde(default = "default_cookie_secure")]
+    pub cookie_secure: bool,
+    #[serde(default = "default_cookie_http_only")]
+    pub cookie_http_only: bool,
+}
+
+fn default_enabled() -> bool { false }
+fn default_timeout() -> i64 { 60 }
+fn default_cookie_path() -> String { "/".to_string() }
+fn default_cookie_secure() -> bool { false }
+fn default_cookie_http_only() -> bool { true }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub global: GlobalConfig,
@@ -15,6 +35,8 @@ pub struct GlobalConfig {
     pub client_max_body_size: Option<String>,
     pub response_format: Option<String>,
     pub cgi: HashMap<String, String>,
+    #[serde(default)]
+    pub sessions: SessionConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -33,6 +55,8 @@ pub struct ServerConfig {
     pub is_default: bool,
     pub routes: Vec<RouteConfig>,
     pub client_max_body_size: Option<String>,
+    #[serde(default)]
+    pub sessions: SessionConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -47,6 +71,8 @@ pub struct RouteConfig {
     pub redirect: Option<RedirectConfig>,
     pub cgi: Option<HashMap<String, String>>,
     pub client_max_body_size: Option<String>,
+    #[serde(default)]
+    pub sessions_required: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
