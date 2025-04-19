@@ -24,6 +24,7 @@ pub struct Route {
     pub redirect: Option<Redirect>,
     pub client_max_body_size: Option<String>,
     pub config: Config,
+    pub sessions_required: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -268,6 +269,7 @@ impl From<(RouteConfig, Config)> for Route {
             cgi: route_config.cgi,
             client_max_body_size: route_config.client_max_body_size,
             config,
+            sessions_required: route_config.sessions_required,
         }
     }
 }

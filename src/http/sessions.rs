@@ -1,8 +1,8 @@
-use std::{char::CharTryFromError, collections::HashMap};
-
-use chrono::{DateTime, Duration, Utc};
-
-use super::{cookies::Cookie, Request};
+use std::collections::HashMap;
+use chrono::{DateTime, Utc, Duration};
+use super::cookies::Cookie;
+use super::request::Request;
+use super::response::Response;
 
 
 pub struct Session {
@@ -75,11 +75,33 @@ impl SessionStore {
 
     pub fn cleanup_expired(&mut self) {
         // Remove sessions past expiration
+        let now = Utc::now();
         self.sessions.retain(|_, session| {
-            session.last_accessed >= Utc::now() - self.session_timeout
+            session.last_accessed >= now - self.session_timeout
         });
     }
 
     pub fn session_from_request(&mut self, request: &Request) -> &mut Session {
+        let session_id = request.headers()
+            .get_cookie("session_id")
+            .and_then(|cookie| Some(cookie.value.clone()));
+
+        match session_id {
+            Some(id) => {
+                let session_exists = self.sessions.contains_key(&id);
+
+                if session_exists {
+                    return self.get_session(&id).unwrap();
+                } else {
+                    return self.create_session();
+                }
+            },
+            None => self.create_session()
+        }
+    }
+
+    pub fn add_session_cookie(&self, response: &mut Response, session: &Session) {
+        let cookie = self.create_session_cookie(&session.id);
+        response.add_cookie(cookie);
     }
 }

@@ -74,6 +74,20 @@ impl Response {
         self.set_body(body.as_bytes().to_vec());
     }
 
+    pub fn add_cookie(&mut self, cookie: Cookie) {
+        let cookie_str = format!(
+            "{}={}{}{}{}{}{}",
+            cookie.name,
+            cookie.value,
+            cookie.expires.map_or(String::new(), |exp| format!("; Expires={}", exp)),
+            cookie.path.map_or(String::new(), |path| format!("; Path={}", path)),
+            cookie.domain.map_or(String::new(), |domain| format!("; Domain={}", domain)),
+            if cookie.secure.unwrap_or(false) { "; Secure" } else { "" },
+            if cookie.http_only.unwrap_or(false) { "; HttpOnly" } else { "" }
+        );
+        self.headers.add("Set-Cookie", &cookie_str);
+    }
+
     // Convert response to bytes
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut response_text = String::new();

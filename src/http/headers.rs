@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use super::cookies::Cookie;
+
 #[derive(Debug, Clone)]
 pub struct Headers {
     headers: HashMap<String, String>,
@@ -67,5 +69,25 @@ impl Headers {
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
         self.headers.iter()
+    }
+
+    pub fn get_cookie(&self, name: &str) -> Option<Cookie> {
+        self.get("cookie").and_then(|cookie_header| {
+            for cookie_str in cookie_header.split(';') {
+                let cookie_parts: Vec<&str> = cookie_str.trim().splitn(2, '=').collect();
+                if cookie_parts.len() == 2 && cookie_parts[0] == name {
+                    return Some(Cookie {
+                        name: name.to_string(),
+                        value: cookie_parts[1].to_string(),
+                        expires: None,
+                        path: None,
+                        domain: None,
+                        secure: None,
+                        http_only: None,
+                    });
+                }
+            }
+            None
+        })
     }
 }

@@ -39,7 +39,7 @@ impl Server {
             None
         };
 
-        Self {
+        Server {
             listeners: HashMap::new(),
             server_name: server_config.server_name,
             host: server_config.host,
@@ -207,7 +207,46 @@ impl Server {
 {:#?}",
                                         req
                                     );
-                                    let res = self.mux.handle(req);
+                                    //let res = self.mux.handle(req);
+                                    let mut res = if let Some(session_store) = &mut self.session_store {
+                                        if rand::random::<f32>() < 0.01 {
+                                            session_store.cleanup_expired();
+                                        }
+
+                                        // First, get the session ID from the request
+                                        let session_id = req.headers()
+                                            .get_cookie("session_id")
+                                            .map(|c| c.value.clone());
+
+                                        // First, handle the session and extract just the session ID string
+                                        let session_id_for_cookie = {
+                                            // Get or create the session
+                                            let session = if let Some(id) = &session_id {
+                                                // Try to get existing session
+                                                if let Some(existing_session) = session_store.get_session(id) {
+                                                    existing_session
+                                                } else {
+                                                    // Create new session if not found
+                                                    session_store.create_session()
+                                                }
+                                            } else {
+                                                // No session ID provided, create new session
+                                                session_store.create_session()
+                                            };
+                                            // Extract just the session ID as a string
+                                            session.id.clone()
+                                        }; // End of mutable borrow scope
+
+                                        let mut resp = self.mux.handle(req);
+
+                                        let cookie = session_store.create_session_cookie(&session_id_for_cookie);
+                                        resp.add_cookie(cookie);
+
+                                        resp
+                                    } else {
+                                        self.mux.handle(req)
+                                    };
+
                                     match listener.send_bytes(res.to_bytes(), fd) {
                                         Ok(_) => {
                                             handled = true;
