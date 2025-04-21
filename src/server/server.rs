@@ -202,13 +202,13 @@ impl Server {
                         if has_read_event {
                             match listener.handle_connection(fd) {
                                 Ok(req) => {
-                                    info!(
-                                        "Parsed HTTP Request:
-{:#?}",
-                                        req
-                                    );
+                                    // info!(
+//                                         "Parsed HTTP Request:
+// {:#?}",
+//                                         req
+//                                     );
                                     //let res = self.mux.handle(req);
-                                    let mut res = if let Some(session_store) = &mut self.session_store {
+                                    let res = if let Some(session_store) = &mut self.session_store {
                                         if rand::random::<f32>() < 0.01 {
                                             session_store.cleanup_expired();
                                         }

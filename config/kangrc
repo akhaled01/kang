@@ -139,7 +139,6 @@
         {
           "path": "/uploads/",
           "root": "./static/uploads/",
-
           "methods": [
             "GET"
           ],

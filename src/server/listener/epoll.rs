@@ -98,13 +98,13 @@ impl EpollListener {
                         return Err(io::Error::last_os_error());
                     }
 
-                    info!("Accepted connection from {:?} fd={}", addr, fd);
+                    // info!("Accepted connection from {:?} fd={}", addr, fd);
                     self.connections.insert(fd, stream);
                     break;
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     // No more connections to accept
-                    info!("No more connections to accept");
+                    // info!("No more connections to accept");
                     break;
                 }
                 Err(e) => {
@@ -125,34 +125,34 @@ impl EpollListener {
         loop {
             match stream.read(&mut temp_buf) {
                 Ok(0) => {
-                    info!("Connection closed by peer fd={}", fd);
+                    // info!("Connection closed by peer fd={}", fd);
                     return Err(io::Error::new(
                         io::ErrorKind::ConnectionAborted,
                         "Connection closed",
                     ));
                 }
                 Ok(n) => {
-                    info!("Received {} bytes from fd={}", n, fd);
+                    // info!("Received {} bytes from fd={}", n, fd);
                     buffer.extend_from_slice(&temp_buf[..n]);
 
                     // Debug: Print received data
                     if let Ok(data) = String::from_utf8(buffer.clone()) {
-                        info!("Received data: {}", data);
+                        // info!("Received data: {}", data);
                     }
 
                     // Try to parse what we have so far
                     match crate::http::Request::parse(&buffer) {
                         Ok(request) => {
-                            info!("Successfully parsed HTTP request for fd={}", fd);
+                            // info!("Successfully parsed HTTP request for fd={}", fd);
                             return Ok(request);
                         }
                         Err(e) => {
-                            info!("Failed to parse request: {} for fd={}", e, fd);
+                            // info!("Failed to parse request: {} for fd={}", e, fd);
                         }
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    info!("WouldBlock on fd={}, buffer size={}", fd, buffer.len());
+                    // info!("WouldBlock on fd={}, buffer size={}", fd, buffer.len());
                     break;
                 }
                 Err(e) => {
@@ -164,14 +164,14 @@ impl EpollListener {
 
         // If we have data but couldn't parse a complete request, keep waiting
         if !buffer.is_empty() {
-            info!("Incomplete request on fd={}, waiting for more data", fd);
+            // info!("Incomplete request on fd={}, waiting for more data", fd);
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "Incomplete request",
             ));
         }
 
-        info!("No data received on fd={}", fd);
+        // info!("No data received on fd={}", fd);
         Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
             "No valid request received",
@@ -198,7 +198,7 @@ impl EpollListener {
             return Err(io::Error::last_os_error());
         }
         self.connections.remove(&fd);
-        info!("Connection removed: fd={}", fd);
+        // info!("Connection removed: fd={}", fd);
         Ok(())
     }
 }
@@ -207,6 +207,6 @@ impl EpollListener {
 impl Drop for EpollListener {
     fn drop(&mut self) {
         unsafe { libc::close(self.epoll_fd) };
-        info!("Epoll listener shutting down");
+        // info!("Epoll listener shutting down");
     }
 }

@@ -15,8 +15,19 @@ use crate::error;
 use crate::http::Request;
 #[cfg(target_os = "macos")]
 use crate::info;
+use crate::{debug, warn};
 
 use super::listener::Listener;
+
+// Find the end of headers in a request (double CRLF)
+fn find_headers_end(buffer: &[u8]) -> Option<usize> {
+    for i in 0..buffer.len() - 3 {
+        if buffer[i..i + 4] == [b'\r', b'\n', b'\r', b'\n'] {
+            return Some(i);
+        }
+    }
+    None
+}
 
 #[cfg(target_os = "macos")]
 /// TCP listening socket using the kqueue interface.
@@ -80,7 +91,7 @@ impl Listener for KqueueListener {
     fn accept_connection(&mut self, global_kqueue_fd: RawFd) -> io::Result<()> {
         // Only try once, since we're in non-blocking mode and got a read event
         match self.listener.accept() {
-            Ok((stream, addr)) => {
+            Ok((stream, _addr)) => {
                 stream.set_nonblocking(true)?;
                 let fd = stream.as_raw_fd();
 
@@ -110,13 +121,13 @@ impl Listener for KqueueListener {
                     return Err(io::Error::last_os_error());
                 }
 
-                info!("Accepted connection from {:?} fd={}", addr, fd);
+                // info!("Accepted connection from {:?} fd={}", addr, fd);
                 self.connections.insert(fd, stream);
                 return Ok(());
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                 // No more connections to accept
-                info!("No more connections to accept");
+                // info!("No more connections to accept");
                 return Ok(());
             }
             Err(e) => {
@@ -141,22 +152,52 @@ impl Listener for KqueueListener {
                     ));
                 }
                 Ok(n) => {
-                    info!("Received {} bytes from fd={}", n, fd);
+                    // info!("Received {} bytes from fd={}", n, fd);
                     buffer.extend_from_slice(&temp_buf[..n]);
 
                     // Try to parse what we have so far
                     match Request::parse(&buffer) {
                         Ok(request) => {
-                            info!("Successfully parsed HTTP request for fd={}", fd);
+                            // info!("Successfully parsed HTTP request for fd={}", fd);
                             return Ok(request);
                         }
                         Err(e) => {
-                            info!("Failed to parse request: {} for fd={}", e, fd);
+                            warn!("Failed to parse request: {} for fd={}", e, fd);
                         }
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    info!("WouldBlock on fd={}, buffer size={}", fd, buffer.len());
+                    // We've read everything available for now
+                    if buffer.len() > 0 {
+                        debug!("Parsing request: {}", String::from_utf8_lossy(&buffer));
+                        // Try to parse what we have
+                        match Request::parse(&buffer) {
+                            Ok(request) => {
+                                // Check if we have the full body based on Content-Length
+                                if let Some(content_length) = request.headers().get("Content-Length") {
+                                    if let Ok(expected_len) = content_length.parse::<usize>() {
+                                        let headers_end = find_headers_end(&buffer).unwrap_or(0);
+                                        let actual_body_len = buffer.len() - headers_end - 4; // -4 for CRLFCRLF
+                                        
+                                        if actual_body_len >= expected_len {
+                                            debug!("Got complete request with body of {} bytes", actual_body_len);
+                                            return Ok(request);
+                                        } else {
+                                            warn!("Incomplete body: got {} of {} bytes", actual_body_len, expected_len);
+                                            break; // Keep reading
+                                        }
+                                    }
+                                } else {
+                                    // No Content-Length header, assume request is complete
+                                    return Ok(request);
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to parse request: {} for fd={}", e, fd);
+                                break;
+                            }
+                        }
+                    }
                     break;
                 }
                 Err(e) => {
@@ -168,14 +209,14 @@ impl Listener for KqueueListener {
 
         // If we have data but couldn't parse a complete request, keep waiting
         if !buffer.is_empty() {
-            info!("Incomplete request on fd={}, waiting for more data", fd);
+            warn!("Incomplete request on fd={}, waiting for more data", fd);
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "Incomplete request",
             ));
         }
 
-        info!("No data received on fd={}", fd);
+        warn!("No data received on fd={}", fd);
         Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
             "No valid request received",
@@ -215,7 +256,7 @@ impl Listener for KqueueListener {
         }
 
         self.connections.remove(&fd);
-        info!("Connection removed: fd={}", fd);
+        // info!("Connection removed: fd={}", fd);
         Ok(())
     }
 
@@ -228,6 +269,6 @@ impl Listener for KqueueListener {
 impl Drop for KqueueListener {
     fn drop(&mut self) {
         unsafe { libc::close(self.kqueue_fd) };
-        info!("Kqueue listener shutting down");
+        // info!("Kqueue listener shutting down");
     }
 }

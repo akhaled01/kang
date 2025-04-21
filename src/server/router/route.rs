@@ -1,5 +1,6 @@
 use crate::error;
 use crate::http::files::FileServer;
+use crate::warn;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -143,6 +144,7 @@ impl Route {
         // Handle file upload for POST requests
         if request.method() == &Method::POST {
             if !request.has_file_upload() {
+                warn!("No file uploaded");
                 return Err(StatusCode::BadRequest);
             }
 

@@ -238,7 +238,7 @@
                 <div class="info-value" id="cookie-value"></div>
             </div>
         </div>
-
+<!-- 
         <div class="card">
             <h2>File Upload Test</h2>
             <p>Use this form to test file uploads on this server:</p>
@@ -259,7 +259,7 @@
                     <img id="preview-image" style="max-width: 300px; max-height: 300px;">
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <footer>
             <p>Kang Web Server Test Page &copy; 2025</p>
@@ -274,56 +274,6 @@
             setTimeout(updateServerTime, 1000);
         }
         updateServerTime();
-
-        // File upload handling
-        document.getElementById('upload-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const fileInput = document.getElementById('file-upload');
-            const resultDiv = document.getElementById('upload-result');
-            const resultContent = document.getElementById('upload-result-content');
-            
-            if (fileInput.files.length > 0) {
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
-
-                try {
-                    const response = await fetch('/', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const result = await response.text();
-                    resultDiv.style.display = 'block';
-                    
-                    if (response.ok) {
-                        resultContent.textContent = `Upload successful!\n${result}`;
-                        resultContent.style.color = '#00b8d4';
-
-                        // If it's an image, show preview
-                        if (fileInput.files[0].type.startsWith('image/')) {
-                            const imgPreview = document.getElementById('image-preview');
-                            const previewImg = document.getElementById('preview-image');
-                            imgPreview.style.display = 'block';
-                            previewImg.src = `/uploads/${fileInput.files[0].name}`;
-                        }
-                    } else {
-                        resultContent.textContent = `Upload failed: ${response.status} ${response.statusText}\n${result}`;
-                        resultContent.style.color = '#ff1744';
-                    }
-                } catch (error) {
-                    resultDiv.style.display = 'block';
-                    resultContent.textContent = `Error: ${error.message}`;
-                    resultContent.style.color = '#ff1744';
-                }
-            } else {
-                resultDiv.style.display = 'block';
-                resultContent.textContent = 'Please select a file first';
-                resultContent.style.color = '#ff1744';
-            }
-
-            // Reset the file input
-            fileInput.value = '';
-        });
 
         // Display actual cookies if available
         function updateCookieInfo() {

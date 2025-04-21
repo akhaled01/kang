@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use crate::utils::parse_size;
-use crate::{debug, info};
+use crate::{debug, info, warn};
 
 pub struct UploadHandler {
     max_body_size: u64,
@@ -117,11 +117,14 @@ impl UploadHandler {
 impl MultipartFormData {
     pub fn parse(body: &[u8], boundary: &str) -> io::Result<Self> {
         if body.is_empty() {
+            warn!("Empty request body");
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "Empty request body",
             ));
         }
+
+        debug!("Request body: {}", String::from_utf8_lossy(body));
 
         let full_boundary = format!("--{}", boundary);
         let full_boundary_bytes = full_boundary.as_bytes();
@@ -245,6 +248,7 @@ impl MultipartFormData {
         }
 
         if files.is_empty() && fields.is_empty() {
+            warn!("Failed to parse any fields or files from multipart data");
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Failed to parse any fields or files from multipart data",

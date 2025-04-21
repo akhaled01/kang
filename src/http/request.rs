@@ -1,6 +1,7 @@
 use std::io;
 use std::str;
 
+use crate::debug;
 use crate::http::headers::Headers;
 use crate::http::upload::MultipartFormData;
 
@@ -105,6 +106,7 @@ impl Request {
     }
 
     pub fn parse(raw_request: &[u8]) -> io::Result<Self> {
+        debug!("Parsing request: {}", String::from_utf8_lossy(raw_request));
         // First, find the end of headers (double CRLF)
         let headers_end = match find_headers_end(raw_request) {
             Some(end) => end,
@@ -188,6 +190,10 @@ impl Request {
 
     // Method to check if request contains a file upload
     pub fn has_file_upload(&self) -> bool {
+        // debug!("Checking if request contains a file upload");
+        // debug!("Method: {:?}", self.method);
+        // debug!("Headers: {:?}", self.headers);
+        // debug!("Body: {:?}", self.body);
         matches!(self.method, Method::POST)
             && self.headers.is_multipart_form_data()
             && self.body.len() > 0

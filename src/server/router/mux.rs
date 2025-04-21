@@ -1,7 +1,7 @@
 use super::route::Route;
 use crate::config::{Config, ServerConfig};
 use crate::http::{Request, Response, StatusCode};
-use crate::{error, info};
+use crate::{debug, error, info};
 use std::fs;
 use std::path::PathBuf;
 
@@ -80,6 +80,7 @@ impl Mux {
         routes.sort_by(|a, b| b.path.len().cmp(&a.path.len()));
 
         for route in &routes {
+            // debug!("validating against: {:?}", route.path.clone());
             let route_path = route.path.trim_end_matches('/');
             
             // Special case for root path
@@ -93,15 +94,45 @@ impl Mux {
             }
 
             // For non-root paths, ensure exact match or proper path separation
-            if request_path == route_path || (
-                request_path.starts_with(&route_path) && 
-                route_path != "" && // prevent root path from matching everything
-                request_path.chars().nth(route_path.len()) == Some('/')
-            ) {
+            // Handle exact match case
+            if request_path == route_path {
+                path_matched = true;
+                if route.methods.contains(&request.method().as_str().to_string()) {
+                    info!("Request matched exact route: {} {}", request.method(), route.path);
+                    return Ok(route.clone());
+                }
+                continue;
+            }
+
+            // Handle subpath matching
+            let route_with_slash = if route_path.ends_with('/') {
+                route_path.to_string()
+            } else {
+                format!("{}/", route_path)
+            };
+
+            if route_path != "" && // prevent root path from matching everything
+               (request_path.starts_with(&route_with_slash) || request_path.starts_with(route_path)) {
                 path_matched = true;
                 if route.methods.contains(&request.method().as_str().to_string()) {
                     info!("Request matched route: {} {}", request.method(), route.path);
                     return Ok(route.clone());
+                }
+            }
+
+            // handle against static files
+            if let Some(root_route) = routes.iter().find(|r| r.path == "/") {
+                if let Some(root_dir) = &root_route.root {
+                    let file_path = PathBuf::from(root_dir).join(request_path.trim_start_matches('/'));
+                    // debug!("Checking file existence: {:?}", file_path);
+                    if file_path.exists() && file_path.is_file() {
+                        debug!("File exists: {:?}", file_path);
+                        path_matched = true;
+                        if root_route.methods.contains(&request.method().as_str().to_string()) {
+                            info!("Request matched static file: {} {}", request.method(), request_path);
+                            return Ok(root_route.clone());
+                        }
+                    }
                 }
             }
         }

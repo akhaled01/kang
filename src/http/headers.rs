@@ -44,7 +44,7 @@ impl Headers {
     // Method to check if content is multipart form data
     pub fn is_multipart_form_data(&self) -> bool {
         if let Some(content_type) = self.get("content-type") {
-            content_type.starts_with("multipart/form-data")
+            content_type.to_lowercase().starts_with("multipart/form-data")
         } else {
             false
         }
@@ -52,12 +52,23 @@ impl Headers {
 
     // Method to get boundary from content-type header
     pub fn get_boundary(&self) -> Option<String> {
+        self.get_multipart_boundary()
+    }
+
+    pub fn get_multipart_boundary(&self) -> Option<String> {
         self.get("content-type").and_then(|content_type| {
-            if let Some(boundary_part) = content_type.split("boundary=").nth(1) {
-                Some(boundary_part.trim_matches('"').to_string())
-            } else {
-                None
-            }
+            content_type
+                .split(';')
+                .find(|part| part.trim().starts_with("boundary="))
+                .and_then(|boundary| {
+                    Some(
+                        boundary
+                            .trim()
+                            .strip_prefix("boundary=")?
+                            .trim_matches('"')
+                            .to_string()
+                    )
+                })
         })
     }
 
