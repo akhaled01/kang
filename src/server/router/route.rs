@@ -156,7 +156,7 @@ impl Route {
             // Parse multipart form data
             let multipart_data = match request.parse_multipart_form_data() {
                 Ok(data) => data,
-                Err(_) => return Err(StatusCode::BadRequest),
+            Err(_) => return Err(StatusCode::BadRequest),
             };
 
             // Create upload handler with client_max_body_size if specified

@@ -54,20 +54,15 @@
         },
         {
           "path": "/uploads",
-          "root": "./static/",
-          "methods": [
-            "POST",
-            "PUT"
-          ],
-          "upload_dir": "./static/uploads",
-          "client_max_body_size": "100M"
-        },
-        {
-          "path": "/uploads/",
           "root": "./static/uploads/",
           "methods": [
-            "GET"
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
           ],
+          "upload_dir": "./static/uploads",
+          "client_max_body_size": "100M",
           "directory_listing": true
         }
       ]
@@ -92,7 +87,8 @@
           "index": "index.html",
           "methods": [
             "GET",
-            "POST"
+            "POST",
+            "DELETE"
           ]
         },
         {

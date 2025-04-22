@@ -147,9 +147,9 @@ impl Request {
         }
 
         let method = Method::from_str(request_parts[0]);
-        let path = request_parts[1];
+        let path = urlencoding::decode(request_parts[1]).unwrap().into_owned();
         let version = request_parts[2];
-        let mut request = Request::new(method, path, version);
+        let mut request = Request::new(method, &path, version);
 
         // Parse headers
         if lines.len() > 1 {

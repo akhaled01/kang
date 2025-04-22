@@ -120,18 +120,16 @@ impl Mux {
                 }
             }
 
-            // handle against static files
-            if let Some(root_route) = routes.iter().find(|r| r.path == "/") {
-                if let Some(root_dir) = &root_route.root {
-                    let file_path = PathBuf::from(root_dir).join(request_path.trim_start_matches('/'));
-                    // debug!("Checking file existence: {:?}", file_path);
-                    if file_path.exists() && file_path.is_file() {
-                        debug!("File exists: {:?}", file_path);
-                        path_matched = true;
-                        if root_route.methods.contains(&request.method().as_str().to_string()) {
-                            info!("Request matched static file: {} {}", request.method(), request_path);
-                            return Ok(root_route.clone());
-                        }
+            // Check if this route can handle file operations
+            if let Some(root_dir) = &route.root {
+                let file_path = PathBuf::from(root_dir).join(request_path.trim_start_matches('/'));
+                debug!("Checking file existence: {:?}", file_path);
+                if file_path.exists() && file_path.is_file() {
+                    debug!("File exists: {:?}", file_path);
+                    path_matched = true;
+                    if route.methods.contains(&request.method().as_str().to_string()) {
+                        info!("Request matched file operation: {} {} (route: {})", request.method(), request_path, route.path);
+                        return Ok(route.clone());
                     }
                 }
             }
