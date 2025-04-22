@@ -141,6 +141,8 @@ impl Listener for KqueueListener {
         let stream = self.connections.get_mut(&fd).unwrap();
         let mut buffer = Vec::new();
         let mut temp_buf = [0; 4096];
+        let mut content_length: Option<usize> = None;
+        let mut headers_end: Option<usize> = None;
 
         loop {
             match stream.read(&mut temp_buf) {
@@ -152,53 +154,66 @@ impl Listener for KqueueListener {
                     ));
                 }
                 Ok(n) => {
-                    // info!("Received {} bytes from fd={}", n, fd);
-                    buffer.extend_from_slice(&temp_buf[..n]);
+                    buffer.extend_from_slice(&temp_buf[0..n]);
 
-                    // Try to parse what we have so far
-                    match Request::parse(&buffer) {
-                        Ok(request) => {
-                            // info!("Successfully parsed HTTP request for fd={}", fd);
-                            return Ok(request);
+                    // If we haven't found the headers end yet, try to find it
+                    if headers_end.is_none() {
+                        if let Some(end) = find_headers_end(&buffer) {
+                            headers_end = Some(end);
+                            
+                            // Parse headers to get Content-Length
+                            if let Ok(headers_str) = std::str::from_utf8(&buffer[0..end]) {
+                                let lines: Vec<&str> = headers_str.split("\r\n").collect();
+                                if lines.len() > 1 {
+                                    for line in &lines[1..] {
+                                        if let Some((name, value)) = line.split_once(": ") {
+                                            if name.eq_ignore_ascii_case("Content-Length") {
+                                                if let Ok(len) = value.trim().parse::<usize>() {
+                                                    debug!("Found Content-Length: {}", len);
+                                                    content_length = Some(len);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        Err(e) => {
-                            warn!("Failed to parse request: {} for fd={}", e, fd);
+                    }
+
+                    // If we have the headers end and content length, check if we have the full body
+                    if let (Some(end), Some(length)) = (headers_end, content_length) {
+                        let total_length = end + 4 + length; // +4 for CRLFCRLF
+                        let current_length = buffer.len();
+                        debug!("Current length: {}, Total needed: {}", current_length, total_length);
+                        
+                        if current_length >= total_length {
+                            // We have the complete request
+                            debug!("Got complete request with body size: {}", length);
+                            match Request::parse(&buffer) {
+                                Ok(request) => return Ok(request),
+                                Err(e) => return Err(e),
+                            }
+                        }
+                        // Don't break on WouldBlock if we haven't received the full body
+                        continue;
+                    } else if headers_end.is_some() && content_length.is_none() {
+                        // We have headers but no content length, try to parse
+                        match Request::parse(&buffer) {
+                            Ok(request) => return Ok(request),
+                            Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(e),
+                            Err(_) => (), // Continue reading
                         }
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    // We've read everything available for now
-                    if buffer.len() > 0 {
-                        debug!("Parsing request: {}", String::from_utf8_lossy(&buffer));
-                        // Try to parse what we have
-                        match Request::parse(&buffer) {
-                            Ok(request) => {
-                                // Check if we have the full body based on Content-Length
-                                if let Some(content_length) = request.headers().get("Content-Length") {
-                                    if let Ok(expected_len) = content_length.parse::<usize>() {
-                                        let headers_end = find_headers_end(&buffer).unwrap_or(0);
-                                        let actual_body_len = buffer.len() - headers_end - 4; // -4 for CRLFCRLF
-                                        
-                                        if actual_body_len >= expected_len {
-                                            debug!("Got complete request with body of {} bytes", actual_body_len);
-                                            return Ok(request);
-                                        } else {
-                                            warn!("Incomplete body: got {} of {} bytes", actual_body_len, expected_len);
-                                            break; // Keep reading
-                                        }
-                                    }
-                                } else {
-                                    // No Content-Length header, assume request is complete
-                                    return Ok(request);
-                                }
-                            }
-                            Err(e) => {
-                                warn!("Failed to parse request: {} for fd={}", e, fd);
-                                break;
-                            }
-                        }
+                    // Only break if we don't know how much data we need
+                    // or if we have no data at all
+                    if content_length.is_none() || buffer.is_empty() {
+                        break;
                     }
-                    break;
+                    // Otherwise, continue trying to read
+                    continue;
                 }
                 Err(e) => {
                     error!("Read error on fd={}: {}", fd, e);
@@ -209,7 +224,12 @@ impl Listener for KqueueListener {
 
         // If we have data but couldn't parse a complete request, keep waiting
         if !buffer.is_empty() {
-            warn!("Incomplete request on fd={}, waiting for more data", fd);
+            if let (Some(end), Some(length)) = (headers_end, content_length) {
+                let total_length = end + 4 + length;
+                warn!("Incomplete request on fd={}, got {} of {} bytes", fd, buffer.len(), total_length);
+            } else {
+                warn!("Incomplete request on fd={}, waiting for more data", fd);
+            }
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "Incomplete request",

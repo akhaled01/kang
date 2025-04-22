@@ -6,6 +6,7 @@ use crate::http::headers::Headers;
 use crate::http::upload::MultipartFormData;
 
 use crate::http::methods::Method;
+use crate::warn;
 
 use std::collections::HashMap;
 
@@ -194,9 +195,18 @@ impl Request {
         // debug!("Method: {:?}", self.method);
         // debug!("Headers: {:?}", self.headers);
         // debug!("Body: {:?}", self.body);
+
+        if !self.headers.is_multipart_form_data() {
+            warn!("Request is not a multipart/form-data request");
+            return false;
+        }
+
+        if self.body.is_empty() {
+            warn!("Request body is empty");
+            return false;
+        }
+
         matches!(self.method, Method::POST)
-            && self.headers.is_multipart_form_data()
-            && self.body.len() > 0
     }
 
     // Parse the multipart form data for file uploads
