@@ -111,12 +111,22 @@ impl Mux {
                 format!("{}/", route_path)
             };
 
-            if route_path != "" && // prevent root path from matching everything
-               (request_path.starts_with(&route_with_slash) || request_path.starts_with(route_path)) {
-                path_matched = true;
-                if route.methods.contains(&request.method().as_str().to_string()) {
-                    info!("Request matched route: {} {}", request.method(), route.path);
-                    return Ok(route.clone());
+            if route_path != "" { // prevent root path from matching everything
+                // For file serving routes (those with root_dir), allow nested paths
+                let is_file_route = route.root.is_some();
+                let path_matches = if is_file_route {
+                    request_path.starts_with(&route_with_slash) || request_path.starts_with(route_path)
+                } else {
+                    // For non-file routes, require exact match or trailing slash only
+                    request_path == route_path || request_path == route_with_slash
+                };
+
+                if path_matches {
+                    path_matched = true;
+                    if route.methods.contains(&request.method().as_str().to_string()) {
+                        info!("Request matched route: {} {}", request.method(), route.path);
+                        return Ok(route.clone());
+                    }
                 }
             }
 

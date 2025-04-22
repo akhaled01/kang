@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use serde_json::json;
 
+use crate::debug;
 use crate::http::status::StatusCode;
 use crate::http::Response;
 use crate::config::config::Config;
@@ -45,18 +46,34 @@ impl FileServer {
     pub fn serve_directory_listing(path: &PathBuf, request_path: &str, config: &Config) -> Response {
         match fs::read_dir(path) {
             Ok(entries) => {
-                let entries_vec: Vec<_> = entries
+                let mut entries_vec: Vec<_> = entries
                     .filter_map(Result::ok)
                     .map(|entry| {
-                        let name = entry.file_name().to_string_lossy().into_owned();
-                        let link = format!("{}/{}", request_path.trim_end_matches('/'), name);
-                        (name, link)
+                        let is_dir = entry.path().is_dir();
+                        let name = entry.path().file_name().unwrap().to_string_lossy().into_owned();
+                        let clean_request_path = request_path.trim_end_matches('/');
+                        // Keep the full relative path for nested directories
+                        let relative_path = entry.path().strip_prefix(path)
+                            .unwrap_or(&entry.path())
+                            .to_string_lossy()
+                            .into_owned();
+                        let link = format!("{}/{}{}", clean_request_path, relative_path, if is_dir { "/" } else { "" });
+                        debug!("Directory listing entry: {}", link);
+                        (name, link, is_dir)
                     })
                     .collect();
 
-                let mut response = Response::new(StatusCode::Ok);
+                // Sort with directories first, then files, both alphabetically
+                entries_vec.sort_by(|a, b| {
+                    match (a.2, b.2) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => a.0.cmp(&b.0)
+                    }
+                });
 
-                let temp =String::from("html"); //TODO: need to convert this to an enum omg
+                let mut response = Response::new(StatusCode::Ok);
+                let temp = String::from("html"); //TODO: need to convert this to an enum omg
                 
                 let format = config.global.response_format.as_ref().unwrap_or(&temp);
                 let format_str = format.as_str();
@@ -64,10 +81,11 @@ impl FileServer {
                     "json" => {
                         let json_content = json!({
                             "directory": request_path,
-                            "entries": entries_vec.iter().map(|(name, link)| {
+                            "entries": entries_vec.iter().map(|(name, link, is_dir)| {
                                 json!({
                                     "name": name,
-                                    "link": link
+                                    "link": link,
+                                    "is_directory": is_dir
                                 })
                             }).collect::<Vec<_>>()
                         });
@@ -75,8 +93,8 @@ impl FileServer {
                         response.set_body(json_content.to_string().into_bytes());
                     },
                     _ => {
-                        let mut html = String::from("<html><body><h1>Directory listing</h1><ul>");
-                        for (name, link) in entries_vec {
+                        let mut html = String::from("<html><body><ul>");
+                        for (name, link, _) in entries_vec {
                             html.push_str(&format!("<li><a href=\"{}\">{}</a></li>", link, name));
                         }
                         html.push_str("</ul></body></html>");

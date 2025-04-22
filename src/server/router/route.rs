@@ -244,7 +244,7 @@ impl Route {
 
                 // Show directory listing if enabled
                 if self.directory_listing {
-                    return Ok(FileServer::serve_directory_listing(&path, &self.path, &self.config));
+                    return Ok(FileServer::serve_directory_listing(&path, request.path(), &self.config));
                 }
 
                 return Err(StatusCode::NotFound);
