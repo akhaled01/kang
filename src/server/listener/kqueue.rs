@@ -249,6 +249,10 @@ impl Listener for KqueueListener {
         Ok(())
     }
 
+    fn get_port(&self) -> u16 {
+        self.listener.local_addr().unwrap().port()
+    }
+
     fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()> {
         let changes = [
             libc::kevent {

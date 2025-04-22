@@ -18,6 +18,7 @@ pub trait Listener: Send + Sync {
     fn handle_connection(&mut self, fd: RawFd) -> io::Result<Request>;
     fn send_bytes(&self, bytes: Vec<u8>, fd: RawFd) -> io::Result<()>;
     fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()>;
+    fn get_port(&self) -> u16;
 }
 
 #[cfg(target_os = "linux")]
@@ -44,5 +45,9 @@ impl Listener for EpollListener {
 
     fn remove_connection(&mut self, fd: RawFd, global_epoll_fd: RawFd) -> io::Result<()> {
         self.remove_connection(fd, global_epoll_fd)
+    }
+
+    fn get_port(&self) -> u16 {
+        self.listener.local_addr().port()
     }
 }

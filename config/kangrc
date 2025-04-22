@@ -58,8 +58,7 @@
           "methods": [
             "GET",
             "POST",
-            "PUT",
-            "DELETE"
+            "PUT"
           ],
           "upload_dir": "./static/uploads",
           "client_max_body_size": "100M",
@@ -88,7 +87,7 @@
           "methods": [
             "GET",
             "POST",
-            "DELETE"
+            "PUT"
           ]
         },
         {

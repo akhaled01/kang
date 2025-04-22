@@ -1,5 +1,10 @@
 use crate::{
-    config::{Config, ErrorPages, ServerConfig}, error, http::SessionStore, info, server::{Listener, Mux, MAX_EVENTS}, warn
+    config::{Config, ErrorPages, ServerConfig},
+    error,
+    http::SessionStore,
+    info,
+    server::{Listener, Mux, MAX_EVENTS},
+    warn,
 };
 
 use std::os::fd::RawFd;
@@ -66,11 +71,21 @@ impl Server {
         let listeners = std::mem::take(&mut self.listeners);
         let mut listeners: Vec<Box<dyn Listener>> = listeners.into_values().collect();
 
+        // Get actual ports from listeners
+        let actual_ports: Vec<u16> = listeners.iter().map(|l| l.get_port()).collect();
+
+        // Format ports as a comma-separated list
+        let ports_str = actual_ports
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
         info!(
-            "Serving: [{}] at {}:{}",
+            "Serving: [{}] at {}:[{}]",
             self.server_name.join("/"),
             self.host,
-            self.ports[0]
+            ports_str
         );
 
         #[cfg(target_os = "linux")]
@@ -203,10 +218,10 @@ impl Server {
                             match listener.handle_connection(fd) {
                                 Ok(req) => {
                                     // info!(
-//                                         "Parsed HTTP Request:
-// {:#?}",
-//                                         req
-//                                     );
+                                    //                                         "Parsed HTTP Request:
+                                    // {:#?}",
+                                    //                                         req
+                                    //                                     );
                                     //let res = self.mux.handle(req);
                                     let res = if let Some(session_store) = &mut self.session_store {
                                         if rand::random::<f32>() < 0.01 {
@@ -214,7 +229,8 @@ impl Server {
                                         }
 
                                         // First, get the session ID from the request
-                                        let session_id = req.headers()
+                                        let session_id = req
+                                            .headers()
                                             .get_cookie("session_id")
                                             .map(|c| c.value.clone());
 
@@ -223,7 +239,9 @@ impl Server {
                                             // Get or create the session
                                             let session = if let Some(id) = &session_id {
                                                 // Try to get existing session
-                                                if let Some(existing_session) = session_store.get_session(id) {
+                                                if let Some(existing_session) =
+                                                    session_store.get_session(id)
+                                                {
                                                     existing_session
                                                 } else {
                                                     // Create new session if not found
@@ -239,7 +257,8 @@ impl Server {
 
                                         let mut resp = self.mux.handle(req);
 
-                                        let cookie = session_store.create_session_cookie(&session_id_for_cookie);
+                                        let cookie = session_store
+                                            .create_session_cookie(&session_id_for_cookie);
                                         resp.add_cookie(cookie);
 
                                         resp
